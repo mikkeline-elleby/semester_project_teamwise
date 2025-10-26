@@ -1,0 +1,14 @@
+{
+  // Human-friendly display name. Use the exact same name in the Tavus dashboard.
+  "name": "<Your Objective Name>",
+  // Short description to help teammates understand the goal.
+  "description": "Describe what success looks like.",
+  // Checklist of measurable outcomes the agent should drive toward.
+  "criteria": [
+    "Outcome 1 (measurable)",
+    "Outcome 2 (measurable)",
+    "Outcome 3 (measurable)"
+  ],
+  // Optional guidance for tone and structure.
+  "guidance": "Keep it concise and action-oriented."
+}

@@ -1,0 +1,11 @@
+{
+  "name": "Facilitator Core Objective",
+  "description": "Ensure an inclusive, timeboxed meeting that ends with decisions and action items.",
+  "criteria": [
+    "Agenda topics are covered within timeboxes",
+    "All participants contribute (no single voice dominates)",
+    "1–3 key decisions captured with owners",
+    "Action items include owner, due date, and success metric"
+  ],
+  "guidance": "Keep summaries to 3 bullets and end with a single action item recap."
+}
