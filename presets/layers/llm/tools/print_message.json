@@ -1,17 +1,19 @@
 {
-  "type": "function",
-  "function": {
-    "name": "print_message",
-    "description": "Prints a message to the backend server logs for debugging.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "text": {
-          "type": "string",
-          "description": "The text to print to the server logs."
+    "type": "function",
+    "function": {
+        "name": "print_message",
+        "description": "Prints a message to the backend server logs for debugging.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "text": {
+                    "type": "string",
+                    "description": "The text to print to the server logs."
+                }
+            },
+            "required": [
+                "text"
+            ]
         }
-      },
-      "required": ["text"]
     }
-  }
 }

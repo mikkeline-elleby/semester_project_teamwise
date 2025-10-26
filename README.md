@@ -234,11 +234,34 @@ Short answer: only if you want Tavus to call your code asynchronously.
 - Objectives and guardrails: These are configured in Tavus and referenced by ID. You don’t need a backend just to attach them. However, if your objectives emit events or you want to observe progress/results asynchronously, set a `callback_url` and run a receiver.
 
 How to test callbacks locally:
-- Run the included minimal webhook receiver:
-  - `python bin/webhook_server.py --port 8080 --path /tavus/callback`
-  - Export a URL for Tavus to call: `export WEBHOOK_URL="http://<your-host-or-tunnel>:8080/tavus/callback"`
-  - For internet reachability from Tavus, use a tunnel (e.g., `ngrok http 8080`) and set `WEBHOOK_URL` to the HTTPS ngrok URL.
+- Run the included FastAPI webhook with Uvicorn:
+  - Start the server: `uvicorn app.main:app --reload --port 8000`
+  - Export a URL for Tavus to call: `export WEBHOOK_URL="http://localhost:8000/tavus/callback"`
+  - For internet reachability from Tavus, use a tunnel (e.g., `ngrok http 8000`) and set `WEBHOOK_URL` to the HTTPS ngrok URL (must end with `/tavus/callback`).
 - The CLI will automatically use `WEBHOOK_URL` as the default `callback_url` if you don’t pass `--callback-url` or set it in config.
+
+### Three-terminal local test (webhook + tunnel + conversation)
+Use this to see tool calls and transcripts live while you talk to your replica.
+
+- Terminal A — Webhook backend
+  - `uvicorn app.main:app --reload --port 8000`
+  - Watch for lines like `[Webhook] print_message: ...` when tools fire.
+
+- Terminal B — Public tunnel
+  - `ngrok http 8000` (or your tunneling tool of choice)
+  - Copy the HTTPS URL and export it: `export WEBHOOK_URL="https://<your-ngrok-id>.ngrok.io/tavus/callback"`
+
+- Terminal C — Create persona and conversation
+  - Ensure your persona includes the sample tools (e.g., `print_message`). A ready-made persona is `configs/persona/facilitator.example.json` and a kickoff conversation is `configs/conversation/facilitator_kickoff.json`.
+  - Create/update persona then create conversation:
+    - One-shot: `bin/scenarios/run_pair.sh configs/persona/facilitator.example.json configs/conversation/facilitator_kickoff.json --update-persona --disable-test-mode`
+    - Or individually with `bin/tune.sh conversation --persona-id <pe_xxx>`; omit `--callback-url` to let it use `WEBHOOK_URL`.
+  - Open the printed `conversation_url` in a browser and say “test”. You should see `[Webhook] print_message: heard test` in Terminal A.
+
+Where to find logs:
+- All API requests/responses: `logs/*_{persona,conversation}_*/`
+- Webhook events: `logs/webhook/<conversation_id>/events.jsonl`
+- Readable transcript: `logs/webhook/<conversation_id>/transcript.txt`
 
 If you don’t set any callback, everything still works synchronously: you can create personas and conversations, open the conversation link, and interact. You just won’t receive async events or tool invocations on your server.
 

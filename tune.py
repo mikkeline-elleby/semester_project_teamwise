@@ -118,14 +118,7 @@ def _resolve_persona_id_by_name(name: str) -> Optional[str]:
         items = data
     else:
         return None
-    # Case-insensitive exact match first; then fallback to contains
-    matches = [it for it in items if str(it.get("persona_name", "")).lower() == name.lower()]
-    if not matches:
-        matches = [it for it in items if name.lower() in str(it.get("persona_name", "")).lower()]
-    if not matches:
-        return None
-    pid = matches[0].get("persona_id") or matches[0].get("id")
-    return pid
+
 def _resolve_persona_id_from_logs(name: Optional[str] = None) -> Optional[str]:
     """Scan logs for latest persona create/update response.json and return persona_id.
     If name is provided, prefer entries with matching persona_name (case-insensitive)."""
@@ -251,9 +244,10 @@ def cmd_persona(args: argparse.Namespace) -> int:
     # Accept comma-separated names via --tools or a list via config { "tools": ["name1", "name2"] }
     tools_arg = getattr(args, "tools", None)
     tools_from_flags = _csv_list(tools_arg) if isinstance(tools_arg, str) else []
-    tools_from_cfg = []
-    if isinstance(cfg.get("tools"), list):
-        tools_from_cfg = [str(x).strip() for x in cfg.get("tools") if str(x).strip()]
+    tools_from_cfg: List[str] = []
+    cfg_tools = cfg.get("tools")
+    if isinstance(cfg_tools, list):
+        tools_from_cfg = [str(x).strip() for x in cfg_tools if str(x).strip()]
     tools_names = tools_from_flags or tools_from_cfg
     if tools_names:
         # Prefer colocated tools under LLM layer

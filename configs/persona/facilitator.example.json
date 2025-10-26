@@ -6,7 +6,7 @@
     "default_replica_id": "r4317e64d25a",
     "llm": "tavus_llama",
     "tts": "cartesia_sonic",
-    "stt": "tavus_advanced",
+    "stt": "",
     "perception": "basic",
     "objectives_id": "",
     "guardrails_id": "",
