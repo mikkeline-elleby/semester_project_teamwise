@@ -418,6 +418,8 @@ def cmd_conversation(args: argparse.Namespace) -> int:
         payload["audio_only"] = cfg.get("audio_only")
     if args.test_mode:
         payload["test_mode"] = True
+    elif getattr(args, "disable_test_mode", False):
+        payload["test_mode"] = False
     elif isinstance(cfg.get("test_mode"), bool):
         payload["test_mode"] = cfg.get("test_mode")
     if args.document_retrieval_strategy:
@@ -536,6 +538,7 @@ def main():
     pc.add_argument("--custom-greeting", help="Replica opening line")
     pc.add_argument("--audio-only", action="store_true", help="Create audio-only conversation")
     pc.add_argument("--test-mode", action="store_true", help="Validate without joining/billing")
+    pc.add_argument("--disable-test-mode", action="store_true", help="Force test_mode=false even if config sets it true")
     pc.add_argument("--document-ids", help="Comma-separated document IDs")
     pc.add_argument("--document-tags", help="Comma-separated document tags")
     pc.add_argument("--document-retrieval-strategy", choices=["speed", "quality", "balanced"], default="balanced", help="Doc retrieval mode")
