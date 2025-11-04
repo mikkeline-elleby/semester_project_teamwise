@@ -53,6 +53,21 @@ bin/scenarios/run_pair.sh \
 
 Logs for all requests and responses are saved in `logs/`.
 
+## Try it: one‑command quickstart (webhook + tunnel + conversation)
+
+Run everything with one command (requires ngrok installed on PATH):
+
+```bash
+bin/quickstart.sh -- --test-mode
+```
+
+What it does:
+- Ensures venv and installs deps if needed
+- Starts uvicorn on :8000
+- Launches ngrok and reads the public URL
+- Writes `WEBHOOK_URL` to `.env`
+- Creates a test conversation and prints the `conversation_url`
+
 ## Recording to S3
 
 There are two ways to get recordings into your S3 bucket. Use native Tavus recording when possible; use the webhook fallback if you can't or don't want to change IAM right now.
