@@ -1,0 +1,6 @@
+{
+  "name": "Janet Product Update Demo",
+  "test_mode": true,
+  "conversational_context": "We are discussing which features to add in the next update. We briefly mention we invited the AI assistant \u201cJanet\u201d to facilitate. We realize neither of us pulled up the notes from last month\u2019s customer interviews. We ask Janet to share the two most common objections from those interviews. Janet answers briefly (two items), then we thank Janet and return to the slides.",
+  "document_retrieval_strategy": "balanced"
+}
