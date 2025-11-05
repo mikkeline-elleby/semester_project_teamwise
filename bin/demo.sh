@@ -25,4 +25,10 @@ echo "[demo] Creating/Updating persona..."
 bin/tune.sh persona --config configs/persona/demo.json --update || bin/tune.sh persona --config configs/persona/demo.json || true
 
 echo "[demo] Creating conversation..."
-bin/tune.sh conversation --config configs/conversation/demo.json
+ARGS=(conversation --config configs/conversation/demo.json --use-s3-recording-from-env --disable-test-mode)
+if [[ -n "${REPLICA_ID:-}" ]]; then
+  ARGS+=(--replica-id "${REPLICA_ID}")
+else
+  ARGS+=(--replica-id "r4317e64d25a")
+fi
+bin/tune.sh "${ARGS[@]}"

@@ -3,5 +3,5 @@
     "participant_pause_sensitivity": "high",
     "participant_interrupt_sensitivity": "high",
     "smart_turn_detection": true,
-    "hotwords": "Mikkeline, Akila, TeamWise"
+    "hotwords": "You are TeamWise, a meeting facilitator., Mikkeline, Akila, Julen"
 }

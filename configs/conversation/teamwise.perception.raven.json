@@ -1,0 +1,6 @@
+{
+    "name": "TeamWise Perception Raven-0 (2p)",
+    "test_mode": false,
+    "conversational_context": "Two participants (Mikkeline and Julen) will join. TeamWise should leverage raven-0 perception to distinguish speakers and reflect names in turns if available. Wait for \"we can start\" before beginning. Keep time, balance participation, and summarize briefly at the end.",
+    "document_retrieval_strategy": "balanced"
+}

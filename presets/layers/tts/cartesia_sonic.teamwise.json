@@ -1,0 +1,13 @@
+{
+    "tts_engine": "cartesia",
+    "external_voice_id": "78ab82d5-25be-4f7d-82b3-7ad64e5b85b2",
+    "voice_settings": {
+        "speed": "normal",
+        "emotion": [
+            "positivity:high",
+            "curiosity"
+        ]
+    },
+    "tts_emotion_control": false,
+    "tts_model_name": "sonic"
+}
