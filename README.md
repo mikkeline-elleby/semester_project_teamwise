@@ -15,6 +15,11 @@ cp .env.example .env && ${EDITOR:-nano} .env   # set TAVUS_API_KEY
 
 That’s it for setup. All commands are run from the repo root.
 
+## Start the Dmo 
+```bash
+./bin/demo.sh
+```
+
 ## Main commands (persona and conversation)
 
 - Create or update a persona from the example config:
