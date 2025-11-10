@@ -1,0 +1,6 @@
+{
+  "conversation_name": "Team Kickoff (Recording)",
+  "enable_recording": true,
+  "test_mode": false,
+  "conversational_context": "You are TeamWise, a facilitator. Greet everyone, set a clear agenda, invite each participant to share one goal, cluster overlapping ideas, and end with 1-2 action items."
+}

@@ -19,6 +19,11 @@ from util import H, PERSONA_ENDPOINT, CONVERSATION_ENDPOINT, save_log, pick_repl
 import pathlib as _pl
 import glob, os
 
+# Defaults for native S3 recording when using config-level enable_recording shortcut
+DEFAULT_RECORDING_ROLE_ARN = "arn:aws:iam::268922422948:role/CVIRecordingRole"
+DEFAULT_RECORDING_REGION = "eu-north-1"
+DEFAULT_RECORDING_BUCKET = "tavus-recording"
+
 
 def _csv_list(val: Optional[str]) -> List[str]:
     """Turn a comma-separated string into a clean list of strings."""
@@ -478,6 +483,16 @@ def cmd_conversation(args: argparse.Namespace) -> int:
             "aws_assume_role_arn": arn,
             "recording_s3_bucket_region": region,
             "recording_s3_bucket_name": bucket,
+        }
+    elif bool(cfg.get("enable_recording") or cfg.get("recording")):
+        # Convenience: if the conversation config has a top-level enable_recording flag,
+        # auto-inject standard S3 properties using hard-coded defaults.
+        # This path is skipped if a properties_file is provided or env flag is used above.
+        payload["properties"] = {
+            "enable_recording": True,
+            "aws_assume_role_arn": DEFAULT_RECORDING_ROLE_ARN,
+            "recording_s3_bucket_region": DEFAULT_RECORDING_REGION,
+            "recording_s3_bucket_name": DEFAULT_RECORDING_BUCKET,
         }
 
     if args.print_payload:

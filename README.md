@@ -49,7 +49,18 @@ bin/tune.sh persona --config configs/persona/facilitator.example.json --print-pa
 ```
 
 ### Mode B: Recording (native Tavus S3)
-Populate recording vars in `.env` then create a conversation with recording enabled (persona config referenced by name).
+Two options:
+
+1) Easiest: add `enable_recording: true` at the top-level of your conversation config. The CLI will auto-inject default S3 settings (role/region/bucket) used in this project.
+```bash
+source .venv/bin/activate
+bin/tune.sh conversation \
+  --config configs/conversation/facilitator_kickoff.recording.json \
+  --disable-test-mode \
+  --replica-id r4317e64d25a
+```
+
+2) Env-driven: populate recording vars in `.env` then create a conversation with recording enabled.
 ```bash
 source .venv/bin/activate
 bin/tune.sh persona --config configs/persona/facilitator.example.json --update || bin/tune.sh persona --config configs/persona/facilitator.example.json
@@ -121,6 +132,10 @@ bin/tune.sh conversation --name "Quick Test" --context "Hello there." --test-mod
 Create a recording conversation from env (replica required):
 ```bash
 bin/tune.sh conversation --replica-id r4317e64d25a --use-s3-recording-from-env --disable-test-mode
+```
+Create a recording conversation using the shortcut flag in config:
+```bash
+bin/tune.sh conversation --config configs/conversation/facilitator_kickoff.recording.json --replica-id r4317e64d25a --disable-test-mode
 ```
 
 ## 8. Cleanup
