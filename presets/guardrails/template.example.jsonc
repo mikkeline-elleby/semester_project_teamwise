@@ -1,0 +1,18 @@
+{
+  // Human-friendly display name. Use the exact same name in the Tavus dashboard.
+  "name": "<Your Guardrail Name>",
+  // Short description of the safety policy.
+  "description": "Describe prohibited content and safe alternatives.",
+  // Prohibited topics or behaviors.
+  "disallow": [
+    "Prohibited item 1",
+    "Prohibited item 2"
+  ],
+  // Required safe behaviors when a disallow rule triggers.
+  "must": [
+    "De-escalate and decline unsafe requests",
+    "Offer to escalate to a human if needed"
+  ],
+  // Tone/style constraints.
+  "style": "Professional, inclusive, no toxicity."
+}

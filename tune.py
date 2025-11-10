@@ -15,7 +15,16 @@ Highlights:
 import argparse, json, sys, pathlib, re
 from typing import List, Optional, Union
 import requests
-from util import H, PERSONA_ENDPOINT, CONVERSATION_ENDPOINT, save_log, pick_replica, WEBHOOK_URL
+from util import (
+    H,
+    PERSONA_ENDPOINT,
+    CONVERSATION_ENDPOINT,
+    save_log,
+    pick_replica,
+    WEBHOOK_URL,
+    resolve_objectives_id_by_name,
+    resolve_guardrails_id_by_name,
+)
 import pathlib as _pl
 import glob, os
 
@@ -209,8 +218,11 @@ def cmd_persona(args: argparse.Namespace) -> int:
     system_prompt = args.system_prompt or cfg.get("system_prompt")
     pipeline_mode = (args.pipeline_mode or cfg.get("pipeline_mode") or "full").lower()
     context = args.context or cfg.get("context")
+    # Accept either explicit IDs or names; names will be resolved below.
     objectives_id = getattr(args, "objectives_id", None) or cfg.get("objectives_id")
     guardrails_id = getattr(args, "guardrails_id", None) or cfg.get("guardrails_id")
+    objectives_name = getattr(args, "objectives_name", None) or cfg.get("objectives_name")
+    guardrails_name = getattr(args, "guardrails_name", None) or cfg.get("guardrails_name")
     default_replica_id = args.default_replica_id or cfg.get("default_replica_id")
     doc_ids = _csv_list(args.document_ids) or _csv_list(cfg.get("document_ids"))
     doc_tags = _csv_list(args.document_tags) or _csv_list(cfg.get("document_tags"))
@@ -229,6 +241,21 @@ def cmd_persona(args: argparse.Namespace) -> int:
         payload["document_ids"] = doc_ids
     if doc_tags:
         payload["document_tags"] = doc_tags
+    # Resolve names to IDs if provided
+    if not objectives_id and objectives_name:
+        resolved = resolve_objectives_id_by_name(objectives_name)
+        if resolved:
+            objectives_id = resolved
+            print(f"Resolved objectives_id '{resolved}' from name '{objectives_name}'.")
+        else:
+            print(f"Warning: could not resolve objectives by name '{objectives_name}'.")
+    if not guardrails_id and guardrails_name:
+        resolved = resolve_guardrails_id_by_name(guardrails_name)
+        if resolved:
+            guardrails_id = resolved
+            print(f"Resolved guardrails_id '{resolved}' from name '{guardrails_name}'.")
+        else:
+            print(f"Warning: could not resolve guardrails by name '{guardrails_name}'.")
     if objectives_id:
         payload["objectives_id"] = objectives_id
     if guardrails_id:
@@ -561,6 +588,8 @@ def main():
     pp.add_argument("--tools-dir", help="Directory where tool JSON files live (default: presets/layers/llm/tools)")
     pp.add_argument("--objectives-id", dest="objectives_id", help="Attach Objectives by ID (created in Tavus dashboard)")
     pp.add_argument("--guardrails-id", dest="guardrails_id", help="Attach Guardrails by ID (created in Tavus dashboard)")
+    pp.add_argument("--objectives-name", dest="objectives_name", help="Resolve and attach Objectives by NAME (looks up via API)")
+    pp.add_argument("--guardrails-name", dest="guardrails_name", help="Resolve and attach Guardrails by NAME (looks up via API)")
     pp.add_argument("--target-persona-name", help="When using --update, resolve persona_id by this name if --persona-id is not provided")
     pp.add_argument("--update", action="store_true", help="Update an existing persona (PATCH) instead of creating (POST)")
     pp.add_argument("--persona-id", help="Persona ID to patch when using --update; can also be set in config as persona_id")
