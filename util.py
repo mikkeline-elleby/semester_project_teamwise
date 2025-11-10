@@ -92,7 +92,7 @@ def resolve_objectives_id_by_name(name: str) -> Optional[str]:
     if not isinstance(items, list):
         return None
     name_keys = ["name", "title", "objective_name", "objectives_name"]
-    id_keys = ["id", "objective_id", "objectives_id"]
+    id_keys = ["uuid", "id", "objective_id", "objectives_id"]
     for it in items:
         if isinstance(it, dict) and _match_name(it, name, name_keys):
             rid = _first_matching_id(it, id_keys)
@@ -115,7 +115,7 @@ def resolve_guardrails_id_by_name(name: str) -> Optional[str]:
     if not isinstance(items, list):
         return None
     name_keys = ["name", "title", "guardrails_name", "policy_name"]
-    id_keys = ["id", "guardrails_id", "policy_id"]
+    id_keys = ["uuid", "id", "guardrails_id", "policy_id"]
     for it in items:
         if isinstance(it, dict) and _match_name(it, name, name_keys):
             rid = _first_matching_id(it, id_keys)

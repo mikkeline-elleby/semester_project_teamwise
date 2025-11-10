@@ -8,8 +8,8 @@
     "tts": "cartesia_sonic",
     "stt": "names_meeting",
     "perception": "basic",
-    "objectives_id": "",
-    "guardrails_id": "",
+    "objectives_name": "Facilitator Core Objective",
+    "guardrails_name": "Facilitator Safety Policy",
     "document_ids": [],
     "document_tags": [],
     "tools": [
