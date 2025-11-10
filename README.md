@@ -23,7 +23,6 @@ Optional convenience (skip if unsure):
 WEBHOOK_URL=https://<your-tunnel>/tavus/callback
 
 # Defaults to reduce flags
-TUNE_DEFAULT_TEST_MODE=true
 TUNE_AUTO_RECORDING=false  # set true to auto-enable S3 recording defaults
 ```
 
@@ -53,7 +52,7 @@ ngrok http 8000
 bin/set_webhook_url.sh "https://<your-ngrok>.ngrok-free.app/tavus/callback"
 ```
 
-Terminal C – create a live conversation (disable test mode):
+Terminal C – create a conversation:
 ```bash
 source .venv/bin/activate
 bin/tune.sh conversation --config configs/conversation/facilitator_kickoff.json

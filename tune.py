@@ -282,7 +282,12 @@ def cmd_persona(args: argparse.Namespace) -> int:
         if tts_path:
             layers["tts"] = _load_layer_fragment(tts_path)
         if stt_path:
-            layers["stt"] = _load_layer_fragment(stt_path)
+            stt_frag = _load_layer_fragment(stt_path)
+            # Normalize hotwords: API expects a string; allow arrays in presets and join here
+            hw = stt_frag.get("hotwords")
+            if isinstance(hw, list):
+                stt_frag["hotwords"] = ", ".join([str(x).strip() for x in hw if str(x).strip()])
+            layers["stt"] = stt_frag
         if perc_path:
             layers["perception"] = _load_layer_fragment(perc_path)
         payload["layers"] = layers
@@ -462,17 +467,13 @@ def cmd_conversation(args: argparse.Namespace) -> int:
         payload["audio_only"] = True
     elif isinstance(cfg.get("audio_only"), bool):
         payload["audio_only"] = cfg.get("audio_only")
-    # (4) Test mode fallback hierarchy: flags > config > env default
+    # Test mode only when explicitly set via flags or config (no env default)
     if args.test_mode:
         payload["test_mode"] = True
     elif getattr(args, "disable_test_mode", False):
         payload["test_mode"] = False
     elif isinstance(cfg.get("test_mode"), bool):
         payload["test_mode"] = cfg.get("test_mode")
-    else:
-        env_default_tm = os.getenv("TUNE_DEFAULT_TEST_MODE")
-        if env_default_tm is not None:
-            payload["test_mode"] = env_default_tm.lower() in ("1", "true", "yes", "on")
     if args.document_retrieval_strategy:
         payload["document_retrieval_strategy"] = args.document_retrieval_strategy
     elif cfg.get("document_retrieval_strategy"):
