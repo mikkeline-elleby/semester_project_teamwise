@@ -203,3 +203,21 @@ Or set `TUNE_AUTO_RECORDING=true` in `.env` to enable it automatically.
 
 ---
 That’s it. For presets and tools, see `presets/README.md`. For examples, check `configs/persona/` and `configs/conversation/`.
+
+## 5) Objectives & Guardrails (optional)
+
+If you have created objectives or guardrails in the Tavus dashboard, you can attach them to a persona with the `objectives_id` and `guardrails_id` fields inside a persona config (or via `--objectives-id` / `--guardrails-id` flags).
+
+Example snippet in a persona config:
+
+```jsonc
+{
+  "persona_name": "Meeting Facilitator",
+  "system_prompt": "...",
+  // Attach existing assets by ID (leave out or empty if not using yet)
+  "objectives_id": "obj_123456789",
+  "guardrails_id": "grd_987654321"
+}
+```
+
+This repository only attaches by ID; it does not create objectives or guardrails. Placeholder folders `objectives/` and `guardrails/` exist for any export or notes you want to store.
