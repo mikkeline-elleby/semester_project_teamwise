@@ -19,10 +19,43 @@ from util import H, PERSONA_ENDPOINT, CONVERSATION_ENDPOINT, save_log, pick_repl
 import pathlib as _pl
 import glob, os
 
-# Defaults for native S3 recording when using config-level enable_recording shortcut
-DEFAULT_RECORDING_ROLE_ARN = "arn:aws:iam::268922422948:role/CVIRecordingRole"
-DEFAULT_RECORDING_REGION = "eu-north-1"
-DEFAULT_RECORDING_BUCKET = "tavus-recording"
+def _build_s3_recording_properties_from_env(exit_on_missing: bool = True) -> Optional[dict]:
+    """Build native Tavus S3 recording properties from environment variables.
+    Requires the following env vars to be set:
+      - S3_RECORDING_ASSUME_ROLE_ARN
+      - S3_RECORDING_BUCKET_REGION
+      - S3_RECORDING_BUCKET_NAME
+    Returns a dict suitable for Conversation.properties or None when missing and exit_on_missing=False.
+    """
+    arn = os.getenv("S3_RECORDING_ASSUME_ROLE_ARN") or os.getenv("AWS_ROLE_ARN") or ""
+    region = os.getenv("S3_RECORDING_BUCKET_REGION") or os.getenv("S3_REGION") or ""
+    bucket = (
+        os.getenv("S3_RECORDING_BUCKET_NAME")
+        or os.getenv("S3_BUCKET_NAME")
+        or os.getenv("S3_BUCKET")
+        or ""
+    )
+    missing = []
+    if not arn: missing.append("S3_RECORDING_ASSUME_ROLE_ARN")
+    if not region: missing.append("S3_RECORDING_BUCKET_REGION")
+    if not bucket: missing.append("S3_RECORDING_BUCKET_NAME")
+    if missing:
+        msg = (
+            "Native S3 recording requires env vars: "
+            + ", ".join(missing)
+            + ". Add them to .env or export before running."
+        )
+        if exit_on_missing:
+            sys.exit(msg)
+        else:
+            print(msg)
+            return None
+    return {
+        "enable_recording": True,
+        "aws_assume_role_arn": arn,
+        "recording_s3_bucket_region": region,
+        "recording_s3_bucket_name": bucket,
+    }
 
 
 def _csv_list(val: Optional[str]) -> List[str]:
@@ -473,41 +506,16 @@ def cmd_conversation(args: argparse.Namespace) -> int:
             payload["properties"] = props
     elif getattr(args, "use_s3_recording_from_env", False):
         # Build properties from environment variables for native Tavus S3 recording
-        arn = os.getenv("S3_RECORDING_ASSUME_ROLE_ARN") or os.getenv("AWS_ROLE_ARN") or ""
-        region = os.getenv("S3_RECORDING_BUCKET_REGION") or os.getenv("S3_REGION") or ""
-        bucket = (
-            os.getenv("S3_RECORDING_BUCKET_NAME")
-            or os.getenv("S3_BUCKET_NAME")
-            or os.getenv("S3_BUCKET")
-            or ""
-        )
-        missing = []
-        if not arn: missing.append("S3_RECORDING_ASSUME_ROLE_ARN")
-        if not region: missing.append("S3_RECORDING_BUCKET_REGION")
-        if not bucket: missing.append("S3_RECORDING_BUCKET_NAME")
-        if missing:
-            sys.exit(
-                "--use-s3-recording-from-env requires env vars: "
-                + ", ".join(missing)
-                + ". You can add them to .env."
-            )
-        payload["properties"] = {
-            "enable_recording": True,
-            "aws_assume_role_arn": arn,
-            "recording_s3_bucket_region": region,
-            "recording_s3_bucket_name": bucket,
-        }
+        props = _build_s3_recording_properties_from_env(exit_on_missing=True)
+        payload["properties"] = props
     else:
         # (5) Auto recording: config shortcut OR env TUNE_AUTO_RECORDING
         auto_record_cfg = bool(cfg.get("enable_recording") or cfg.get("recording"))
         auto_record_env = os.getenv("TUNE_AUTO_RECORDING", "").lower() in ("1", "true", "yes", "on")
         if auto_record_cfg or (auto_record_env and not cfg.get("disable_recording")):
-            payload["properties"] = {
-                "enable_recording": True,
-                "aws_assume_role_arn": DEFAULT_RECORDING_ROLE_ARN,
-                "recording_s3_bucket_region": DEFAULT_RECORDING_REGION,
-                "recording_s3_bucket_name": DEFAULT_RECORDING_BUCKET,
-            }
+            props = _build_s3_recording_properties_from_env(exit_on_missing=True)
+            if props:
+                payload["properties"] = props
 
     if args.print_payload or os.getenv("TUNE_VERBOSE"):
         print(json.dumps(payload, indent=2))
