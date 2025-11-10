@@ -1,46 +1,24 @@
 {
-    "persona_name": "Meeting Facilitator",
-    "system_prompt": "You are TeamWise, a meeting facilitator who keeps sessions focused and productive.",
-    "pipeline_mode": "full",
-    "context": "Guide discussions, ensure participation, and summarize key points at the end.",
-    "default_replica_id": "r4317e64d25a",
-    "objectives_id": "",
-    "guardrails_id": "",
-    "document_ids": [],
-    "document_tags": [],
-    "layers": {
-        "llm": {
-            "model": "tavus-llama",
-            "speculative_inference": true,
-            "tools": []
-        },
-        "tts": {
-            "tts_engine": "cartesia",
-            "tts_model_name": "sonic",
-            "tts_emotion_control": false,
-            "voice_settings": {
-                "speed": "normal",
-                "emotion": ["positivity:high", "curiosity"]
-            }
-        },
-        "stt": {
-            "stt_engine": "tavus-advanced",
-            "participant_pause_sensitivity": "high",
-            "participant_interrupt_sensitivity": "high",
-            "smart_turn_detection": true,
-            "hotwords": "Julie, Mikkel, Alex, Sam, TeamWise"
-        },
-        "perception": {
-            "perception_model": "basic"
-        }
-    },
-    "tools": [
-        "summarize_discussion",
-        "take_meeting_notes",
-        "cluster_ideas",
-        "print_message",
-        "get_speaker_name",
-        "get_current_speaker",
-        "get_roster"
-    ]
+  "persona_name": "Meeting Facilitator",
+  "system_prompt": "You are TeamWise, a meeting facilitator who keeps sessions focused and productive.",
+  "pipeline_mode": "full",
+  "context": "Guide discussions, ensure participation, and summarize key points at the end.",
+  "default_replica_id": "r4317e64d25a",
+  "llm": "tavus_llama",
+  "tts": "cartesia_sonic",
+  "stt": "names_meeting",
+  "perception": "basic",
+  "objectives_id": "",
+  "guardrails_id": "",
+  "document_ids": [],
+  "document_tags": [],
+  "tools": [
+    "summarize_discussion",
+    "take_meeting_notes",
+    "cluster_ideas",
+    "print_message",
+    "get_speaker_name",
+    "get_current_speaker",
+    "get_roster"
+  ]
 }
