@@ -1,0 +1,21 @@
+{
+  "type": "function",
+  "function": {
+    "name": "log_key_point_or_decision",
+    "description": "Record a key point or a decision made by the group.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "entry_type": {
+          "type": "string",
+          "description": "Either 'key_point' or 'decision'."
+        },
+        "content": {
+          "type": "string",
+          "description": "The key point or decision described neutrally."
+        }
+      },
+      "required": ["entry_type", "content"]
+    }
+  }
+}

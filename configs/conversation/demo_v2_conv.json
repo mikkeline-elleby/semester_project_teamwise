@@ -1,15 +1,22 @@
 {
-    "persona_id": "p4d1697b9eb5",
-    "replica_id": "",
-    "conversation_name": "My Conversation",
-    "conversational_context": "Set the scene here: who is the user, what is the objective, and any constraints.",
+    "persona_id": "p488601f0dea",
+    "replica_id": "r4317e64d25a",
+    "conversation_name": "Demo Conversation",
+    "conversational_context": "",
     "custom_greeting": "",
-    "audio_only": true,
+    "audio_only": false,
     "document_ids": [],
     "document_tags": [],
     "document_retrieval_strategy": "balanced",
     "memory_stores": [],
     "test_mode": false,
     "properties": {
+        "enable_recording": true,
+        "max_call_duration": 1800,
+        "participant_left_timeout": 60,
+        "participant_absent_timeout": 120,
+        "language": "multilingual",
+        "enable_closed_captions": false,
+        "apply_greenscreen": false
     }
 }

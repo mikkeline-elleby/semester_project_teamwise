@@ -1,0 +1,17 @@
+{
+  "type": "function",
+  "function": {
+    "name": "log_open_question",
+    "description": "Record an unresolved question that should appear in the wrap-up.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "question": {
+          "type": "string",
+          "description": "The open question in the group’s own wording."
+        }
+      },
+      "required": ["question"]
+    }
+  }
+}
