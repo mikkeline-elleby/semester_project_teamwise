@@ -1,0 +1,7 @@
+{
+    "turn_detection_model": "sparrow-1",
+    "turn_taking_patience": "low",
+    "replica_interruptibility": "high",
+    "turn_commitment": "high",
+    "active_listening": "high"
+}
