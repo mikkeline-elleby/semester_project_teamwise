@@ -3,7 +3,7 @@
 This folder collects reusable building blocks for personas and conversations. It includes:
 - Objectives presets (`presets/objectives/*.json`)
 - Guardrails presets (`presets/guardrails/*.json`)
-- Layer fragments (`presets/layers/**` for llm/tts/stt/perception)
+- Layer fragments (`presets/layers/**` for llm/tts/stt/perception/conversational flow)
 - Tool definitions (`presets/tools/*.json`)
 
 The workflow is config-first: define presets once, sync policies to Tavus, and then reference them by name in your persona configs. No CLI flags are required.
@@ -113,6 +113,20 @@ Common fields:
 - voice_settings (e.g., speed, emotion)
 - tts_emotion_control
 
+## Conversational Layer layer fragments
+
+Configure the natural dynamics of conversation. Place files in `presets/layers/conversational_flow/`.
+
+Common fields:
+- turn_detection_model
+- turn_taking_patience
+- replica_interruptibility
+- turn_commitment
+- active_listening
+
+For more info about the fields, look at [Conversational Flow - Tavus Docs](https://docs.tavus.io/sections/conversational-video-interface/persona/conversational-flow).
+
 ## Tools
 
 Function-calling tool definitions live in `presets/tools/`. Each file can contain a single tool, an array of tools, or an object with a top-level `tools` array. Reference them from your persona’s LLM layer by including them in the `tools` array (inline or by copying the definitions into your layer).
+
