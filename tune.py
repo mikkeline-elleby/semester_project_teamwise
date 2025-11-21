@@ -36,8 +36,19 @@ def _build_s3_recording_properties_from_env(exit_on_missing: bool = True) -> Opt
       - S3_RECORDING_BUCKET_NAME
     Returns a dict suitable for Conversation.properties or None when missing and exit_on_missing=False.
     """
-    arn = os.getenv("S3_RECORDING_ASSUME_ROLE_ARN") or os.getenv("AWS_ROLE_ARN") or ""
-    region = os.getenv("S3_RECORDING_BUCKET_REGION") or os.getenv("S3_REGION") or ""
+    # Support legacy and simplified env var names
+    arn = (
+        os.getenv("S3_RECORDING_ASSUME_ROLE_ARN")
+        or os.getenv("AWS_ASSUME_ROLE_ARN")
+        or os.getenv("AWS_ROLE_ARN")
+        or ""
+    )
+    region = (
+        os.getenv("S3_RECORDING_BUCKET_REGION")
+        or os.getenv("S3_REGION")
+        or os.getenv("AWS_REGION")
+        or ""
+    )
     bucket = (
         os.getenv("S3_RECORDING_BUCKET_NAME")
         or os.getenv("S3_BUCKET_NAME")
@@ -526,7 +537,6 @@ def cmd_conversation(args: argparse.Namespace) -> int:
             props = json.loads(p.read_text())
         except Exception as e:
             sys.exit(f"properties file is not valid JSON: {e}")
-        # Accept either a plain properties object or an object with top-level "properties"
         if isinstance(props, dict) and "properties" in props and isinstance(props.get("properties"), dict) and (len(props.keys()) == 1 or (len(props.keys()) == 2 and "comment" in props)):
             payload["properties"] = props["properties"]
         else:
@@ -534,20 +544,32 @@ def cmd_conversation(args: argparse.Namespace) -> int:
                 sys.exit("properties file must be a JSON object (either the properties object or { \"properties\": { ... } })")
             payload["properties"] = props
     elif isinstance(cfg.get("properties"), dict):
-        # Accept inline properties from config directly
         payload["properties"] = cfg["properties"]
     elif getattr(args, "use_s3_recording_from_env", False):
-        # Build properties from environment variables for native Tavus S3 recording
         props = _build_s3_recording_properties_from_env(exit_on_missing=True)
         payload["properties"] = props
-    else:
-        # (5) Auto recording: config shortcut OR env TUNE_AUTO_RECORDING
-        auto_record_cfg = bool(cfg.get("enable_recording") or cfg.get("recording"))
-        auto_record_env = os.getenv("TUNE_AUTO_RECORDING", "").lower() in ("1", "true", "yes", "on")
-        if auto_record_cfg or (auto_record_env and not cfg.get("disable_recording")):
-            props = _build_s3_recording_properties_from_env(exit_on_missing=True)
-            if props:
-                payload["properties"] = props
+
+    # Auto recording injection runs regardless of how properties were initially set
+    auto_record_cfg = bool(
+        cfg.get("enable_recording")
+        or cfg.get("recording_enable")
+        or cfg.get("recording")
+    )
+    auto_record_env = os.getenv("TUNE_AUTO_RECORDING", "").lower() in ("1", "true", "yes", "on")
+    if auto_record_cfg or (auto_record_env and not cfg.get("disable_recording")):
+        props_auto = _build_s3_recording_properties_from_env(exit_on_missing=True)
+        if props_auto:
+            existing = payload.get("properties") if isinstance(payload.get("properties"), dict) else {}
+            if not isinstance(existing, dict):
+                existing = {}
+            merged: dict = {}
+            for k, v in existing.items():
+                merged[k] = v
+            for k, v in props_auto.items():
+                if k not in merged:
+                    merged[k] = v
+            merged["enable_recording"] = True
+            payload["properties"] = merged
 
     if args.print_payload or os.getenv("TUNE_VERBOSE"):
         print(json.dumps(payload, indent=2))

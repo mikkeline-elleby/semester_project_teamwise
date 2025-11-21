@@ -1,5 +1,5 @@
 {
-    "persona_id": "pf68b3b80402",
+    "persona_id": "p31d575cdfdb",
     "replica_id": "r4317e64d25a",
     "conversation_name": "Demo Conversation",
     "conversational_context": "",
@@ -10,8 +10,8 @@
     "document_retrieval_strategy": "balanced",
     "memory_stores": [],
     "test_mode": false,
+    "recording_enable": false,
     "properties": {
-        "enable_recording": true,
         "max_call_duration": 1800,
         "participant_left_timeout": 60,
         "participant_absent_timeout": 600,
