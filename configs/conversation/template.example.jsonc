@@ -28,7 +28,8 @@
     "callback_url": "",
     // Recording options (choose one of the following approaches):
     // 1) Shortcut: set enable_recording = true to auto-inject default role/region/bucket used by this harness.
-    "recording_enable": true,
+    //    Set to true only if you want native S3 recording.
+    "recording_enable": false,
     // 2) Full control via properties (if you prefer explicit configuration or your defaults differ):
     // "properties": {
     //   "enable_recording": true,
@@ -45,6 +46,11 @@
     //   language                             : e.g. 'english', 'multilingual'
     //   enable_closed_captions (bool)        : request captions
     //   apply_greenscreen (bool)             : apply background effect
+    // Multi-speaker diarization:
+    // - Set enable_closed_captions = true (below) to enable Daily transcription.
+    // - In your client, listen to Daily "transcription-message" events for per-speaker lines:
+    //   https://docs.daily.co/reference/daily-js/events/transcription-events#transcription-message
+    //   Note: Tavus utterance webhooks are not diarized; use Daily events for speaker labels.
     "properties": {
         "enable_recording": false,
         "max_call_duration": 1800,

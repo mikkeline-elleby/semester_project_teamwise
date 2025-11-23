@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Daily + Tavus diarization helper</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; margin: 16px; line-height: 1.4; background: #0b1021; color: #f2f4ff; }
+    h1 { margin: 0 0 12px; font-size: 22px; }
+    label { display: block; margin: 8px 0 4px; font-weight: 600; }
+    input { width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #29304a; background: #11172f; color: #f2f4ff; }
+    button { margin-top: 12px; padding: 10px 14px; border: none; border-radius: 8px; background: #4fd1c5; color: #0b1021; font-weight: 700; cursor: pointer; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .row { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 8px; }
+    @media (min-width: 900px) { .row { grid-template-columns: 320px 1fr; } }
+    #call { width: 100%; min-height: 500px; background: #0e152d; border: 1px solid #1c2540; border-radius: 10px; overflow: hidden; }
+    #log { background: #0e152d; border: 1px solid #1c2540; border-radius: 10px; padding: 10px; height: 260px; overflow-y: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .note { font-size: 13px; color: #9eb0e0; margin-top: 6px; }
+  </style>
+  <script src="https://unpkg.com/@daily-co/daily-js"></script>
+</head>
+<body>
+  <h1>Daily diarization → Tavus roster helper</h1>
+  <div class="row">
+    <div>
+      <label for="conversation-url">Conversation URL (from tune.py)</label>
+      <input id="conversation-url" placeholder="https://tavus.daily.co/abcdef123456" />
+      <label for="webhook-base">Webhook base (FastAPI)</label>
+      <input id="webhook-base" value="http://localhost:8000" />
+      <label for="display-name">Your display name</label>
+      <input id="display-name" placeholder="Alex" />
+      <button id="join-btn">Join and listen</button>
+      <div class="note">Ensure the conversation config has enable_closed_captions=true. Start your FastAPI webhook (uvicorn app.main:app).</div>
+      <div class="note">We post participant info to /roster/register to keep Tavus tools diarization-aware.</div>
+    </div>
+    <div id="call"></div>
+  </div>
+  <label style="margin-top:16px;">Event log</label>
+  <div id="log"></div>
+
+  <script>
+    const logEl = document.getElementById("log");
+    const convoInput = document.getElementById("conversation-url");
+    const webhookInput = document.getElementById("webhook-base");
+    const nameInput = document.getElementById("display-name");
+    const joinBtn = document.getElementById("join-btn");
+
+    let frame = null;
+    let conversationId = null;
+    let participants = {};
+    let lastActivePeerId = null;
+    let lastRosterSnapshot = null;
+
+    function logLine(msg) {
+      const line = document.createElement("div");
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      logEl.appendChild(line);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function parseConversationId(url) {
+      try {
+        const u = new URL(url);
+        const parts = u.pathname.split("/").filter(Boolean);
+        return parts[0] || null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function rememberParticipant(p) {
+      if (!p) return null;
+      const id = p.session_id || p.peerId || p.id || null;
+      const name = p.user_name || p.name || p.user_id || (id ? `user-${id.slice(-5)}` : "Unknown");
+      if (id) participants[id] = { id, name };
+      return id ? { id, name } : null;
+    }
+
+    async function registerRoster(p, active = false) {
+      const entry = rememberParticipant(p);
+      if (!entry || !conversationId) return;
+      const body = {
+        conversation_id: conversationId,
+        display_name: entry.name,
+        participant_id: entry.id,
+        active,
+      };
+      try {
+        const base = webhookInput.value.replace(/\/$/, "");
+        await fetch(`${base}/roster/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        logLine(`Roster updated: ${entry.name} (${entry.id})${active ? " [active]" : ""}`);
+      } catch (err) {
+        logLine(`Failed to POST /roster/register: ${err}`);
+      }
+    }
+
+    function participantFromId(id) {
+      return participants[id] || null;
+    }
+
+    function currentSpeakerName() {
+      // Prefer last active; else the only non-facilitator participant; else any participant
+      const facilKeywords = ["assistant", "facilitator", "meeting facilitator", "teamwise"];
+      const isFacil = (nm) => facilKeywords.some((k) => nm?.toLowerCase().includes(k));
+      if (lastActivePeerId && participants[lastActivePeerId]) {
+        return participants[lastActivePeerId].name;
+      }
+      const nonFacil = Object.values(participants).find((p) => !isFacil(p.name || ""));
+      if (nonFacil) return nonFacil.name;
+      const any = Object.values(participants)[0];
+      return any ? any.name : "";
+    }
+
+    function sendEcho(text, inferenceId) {
+      if (!frame || !conversationId) return;
+      const interaction = {
+        message_type: "conversation",
+        event_type: "conversation.echo",
+        conversation_id: conversationId,
+        properties: {
+          modality: "text",
+          text,
+          done: true,
+        },
+      };
+      if (inferenceId) interaction.properties.inference_id = inferenceId;
+      try {
+        frame.sendAppMessage(interaction, "*");
+        logLine(`Sent echo → "${text}"`);
+      } catch (e) {
+        logLine(`Failed to send echo: ${e}`);
+      }
+    }
+
+    function handleToolCall(event) {
+      const { properties = {}, inference_id: inferenceId, conversation_id: convId } = event || {};
+      if (convId && !conversationId) conversationId = convId;
+      const toolName = properties.name;
+      if (toolName === "get_current_speaker") {
+        const name = currentSpeakerName() || "Guest";
+        sendEcho(`You are ${name}.`, inferenceId);
+        return;
+      }
+      if (toolName === "get_roster") {
+        const rosterNames = Object.values(participants).map((p) => p.name).join(", ");
+        sendEcho(`Participants: ${rosterNames || "unknown"}.`, inferenceId);
+        return;
+      }
+      logLine(`Unhandled tool_call ${toolName || "<unknown>"}`);
+    }
+
+    function wireEvents(call) {
+      call.on("participant-joined", (ev) => {
+        registerRoster(ev.participant, false);
+      });
+      call.on("participant-updated", (ev) => {
+        registerRoster(ev.participant, false);
+      });
+      call.on("active-speaker-change", (ev) => {
+        lastActivePeerId = ev.activeSpeaker?.peerId || null;
+        const p = participantFromId(lastActivePeerId);
+        if (p) registerRoster(p, true);
+      });
+      call.on("transcription-started", () => logLine("Captions ON"));
+      call.on("transcription-stopped", () => logLine("Captions OFF"));
+      call.on("transcription-message", (ev) => {
+        const msg = ev.message || ev;
+        const text = msg.text || "";
+        const speaker = msg.participant || participantFromId(lastActivePeerId);
+        if (text) {
+          const label = speaker?.user_name || speaker?.name || speaker?.user_id || participantFromId(lastActivePeerId)?.name || "Unknown";
+          logLine(`[CC] ${label}: ${text}${msg.is_final ? "" : " (interim)"}`);
+        }
+        if (msg.is_final && msg.participant) {
+          registerRoster(msg.participant, true);
+        }
+      });
+      // Listen for interactions protocol over app-message (Tavus tool calls)
+      call.on("app-message", (ev) => {
+        const data = ev?.data || {};
+        if (data?.event_type === "conversation.tool_call") {
+          logLine(`Tool call received: ${data?.properties?.name || "<unknown>"}`);
+          handleToolCall(data);
+        }
+      });
+    }
+
+    joinBtn.addEventListener("click", async () => {
+      const url = convoInput.value.trim();
+      const name = nameInput.value.trim() || "Guest";
+      conversationId = parseConversationId(url);
+      if (!url || !conversationId) {
+        logLine("Invalid conversation URL");
+        return;
+      }
+      joinBtn.disabled = true;
+      logLine(`Joining ${url} as ${name}`);
+      if (frame) {
+        try { await frame.leave(); } catch (e) {}
+      }
+      frame = window.DailyIframe.createFrame(document.getElementById("call"), {
+        showLeaveButton: true,
+        iframeStyle: { width: "100%", height: "100%", border: "0" },
+      });
+      wireEvents(frame);
+      try {
+        await frame.join({ url, userName: name });
+        logLine("Joined meeting. Talk in two tabs to see diarization.");
+        // Register local participant immediately so the persona knows your name even before you speak
+        registerRoster(frame?.participants().local, true);
+      } catch (err) {
+        logLine(`Join failed: ${err}`);
+        joinBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

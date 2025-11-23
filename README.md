@@ -47,6 +47,8 @@ bin/tune.sh conversation --config configs/conversation/facilitator_kickoff.json
 
 `bin/set_webhook_url.sh` writes `WEBHOOK_URL` into `.env`. Run it after the tunnel is up.
 
+- Daily diarization helper (for multi-speaker): start your webhook (`uvicorn app.main:app`), create a conversation with `enable_closed_captions: true` (example: `configs/conversation/demo_v2_conv_cc.json`), then open `web-demo/daily_diarization.html` in a browser (serve it with `python -m http.server 8001`). Paste the `conversation_url`, set webhook base (default `http://localhost:8000`), join, and watch `/roster/register` updates + per-speaker CC logs.
+
 ## 4) Utilities
 
 ```bash
@@ -126,5 +128,4 @@ This is a quick guide to the important folders/files and what they do. Focus on 
 - Webhooks → run `uvicorn app.main:app`, expose via ngrok, then `bin/set_webhook_url.sh <public-url>`
 
 If you’d like more examples (e.g., composing multiple documents or layering tools), open an issue or drop a comment.
-
 

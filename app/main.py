@@ -11,6 +11,7 @@ from datetime import datetime
 import urllib.request
 import tempfile
 import boto3
+import requests
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -24,6 +25,7 @@ APP_SECRET = os.getenv("WEBHOOK_SHARED_SECRET", "")
 class ToolCall(BaseModel):
     name: str = Field(..., description="Tool/function name")
     arguments: Dict[str, Any] = Field(default_factory=dict)
+    call_id: Optional[str] = Field(default=None, description="Upstream tool call id if provided")
 
 
 class TavusEvent(BaseModel):
@@ -90,6 +92,10 @@ handlers: Dict[str, Any] = {}
 #   "last_speaker_name": str | None,
 # }
 ROSTER: Dict[str, Dict[str, Any]] = {}
+
+TAVUS_INTERACTIONS_ENDPOINT = os.getenv("TAVUS_INTERACTIONS_ENDPOINT", "https://tavusapi.com/v2/interactions")
+ENABLE_TAVUS_ECHO = (os.getenv("ENABLE_TAVUS_ECHO") or "").lower() in ("1", "true", "yes")
+TAVUS_API_KEY = os.getenv("TAVUS_API_KEY") or ""
 
 
 def register_tool(name: str):
@@ -224,6 +230,9 @@ def handle_get_speaker_name(payload: TavusEvent) -> Dict[str, Any]:
 @register_tool("get_current_speaker")
 def handle_get_current_speaker(payload: TavusEvent) -> Dict[str, Any]:
     conv_id = payload.conversation_id or ""
+    # Fallback: if conversation_id missing or unknown but only one roster exists, use it
+    if (not conv_id or conv_id not in ROSTER) and len(ROSTER) == 1:
+        conv_id = list(ROSTER.keys())[0]
     # Prefer current payload message set
     props = payload.properties or {}
     transcript = props.get("transcript") if isinstance(props, dict) else None
@@ -243,7 +252,31 @@ def handle_get_current_speaker(payload: TavusEvent) -> Dict[str, Any]:
         entry = ROSTER[conv_id]
         current_name = entry.get("last_speaker_name")
         current_id = entry.get("last_speaker_id")
-    return {"participant_id": current_id or "", "display_name": current_name or ""}
+    if conv_id and conv_id in ROSTER:
+        entry = ROSTER[conv_id]
+        participants = entry.get("participants", {}) or {}
+        facilitator_tokens = {"assistant", "facilitator", "meeting facilitator", "teamwise"}
+        def _is_facilitator(name: str) -> bool:
+            n = name.lower()
+            return any(tok in n for tok in facilitator_tokens)
+
+        # If nothing found, or we picked the facilitator, choose a non-facilitator participant if one exists
+        if (not current_name) or _is_facilitator(current_name):
+            for pid, nm in participants.items():
+                if nm and not _is_facilitator(nm):
+                    current_id, current_name = pid, nm
+                    break
+        # If still nothing and there is exactly one participant, assume they are current speaker
+        if (not current_name) and len(participants) == 1:
+            only_pid, only_nm = list(participants.items())[0]
+            current_id, current_name = only_pid, only_nm
+
+    result = {"participant_id": current_id or "", "display_name": current_name or ""}
+    try:
+        print(f"[get_current_speaker] conv={conv_id} result={result} roster_size={len(ROSTER.get(conv_id, {}).get('participants', {}))} roster_keys={list(ROSTER.keys())}")
+    except Exception:
+        pass
+    return result
 
 
 @register_tool("get_roster")
@@ -277,6 +310,18 @@ def process_event(evt: TavusEvent) -> None:
 
 def _extract_tool_calls_from_payload(payload: Dict[str, Any]) -> List[ToolCall]:
     calls: List[ToolCall] = []
+    props = payload.get("properties") or {}
+    # Newer Tavus interaction format: event_type=conversation.tool_call with properties.name/arguments
+    if payload.get("event_type") == "conversation.tool_call":
+        if isinstance(props, dict) and isinstance(props.get("name"), str):
+            args = props.get("arguments") or {}
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except Exception:
+                    args = {"raw": args}
+            calls.append(ToolCall(name=props["name"], arguments=args, call_id=props.get("id") or payload.get("inference_id")))
+            return calls
     # Direct tool format
     direct_tool = payload.get("tool")
     if isinstance(direct_tool, dict) and isinstance(direct_tool.get("name"), str):
@@ -286,7 +331,7 @@ def _extract_tool_calls_from_payload(payload: Dict[str, Any]) -> List[ToolCall]:
                 args = json.loads(args)
             except Exception:
                 args = {"raw": args}
-        calls.append(ToolCall(name=direct_tool["name"], arguments=args))
+        calls.append(ToolCall(name=direct_tool["name"], arguments=args, call_id=direct_tool.get("id")))
         return calls
     # Some payloads may nest inside data
     data = payload.get("data") or {}
@@ -297,7 +342,7 @@ def _extract_tool_calls_from_payload(payload: Dict[str, Any]) -> List[ToolCall]:
                 args = json.loads(args)
             except Exception:
                 args = {"raw": args}
-        calls.append(ToolCall(name=str(data["tool"]), arguments=args))
+        calls.append(ToolCall(name=str(data["tool"]), arguments=args, call_id=data.get("id")))
         return calls
     # Transcription-style payloads: properties.transcript[].tool_calls
     props = payload.get("properties") or {}
@@ -324,7 +369,7 @@ def _extract_tool_calls_from_payload(payload: Dict[str, Any]) -> List[ToolCall]:
                         args = {"raw": args}
                 elif not isinstance(args, dict):
                     args = {}
-                calls.append(ToolCall(name=name, arguments=args))
+                calls.append(ToolCall(name=name, arguments=args, call_id=tc.get("id")))
     return calls
 
 
@@ -389,6 +434,43 @@ def _maybe_get_recording_url(payload: Dict[str, Any]) -> Optional[str]:
             if isinstance(v, str) and v.startswith("http"):
                 return v
     return None
+
+
+def _broadcast_echo(conversation_id: str, text: str, inference_id: Optional[str] = None) -> None:
+    """Send a conversation.echo to Tavus to make the replica say the provided text.
+    Requires ENABLE_TAVUS_ECHO=true and TAVUS_API_KEY to be set."""
+    if not ENABLE_TAVUS_ECHO:
+        return
+    if not TAVUS_API_KEY:
+        print("[Webhook] ENABLE_TAVUS_ECHO set but TAVUS_API_KEY missing; skipping echo")
+        return
+    # Note: Some Tavus deployments expect a leaner body without message_type.
+    # We keep conversation_id + event_type + properties, and log full response.
+    payload = {
+        "event_type": "conversation.echo",
+        "conversation_id": conversation_id,
+        "properties": {
+            "modality": "text",
+            "text": text,
+            "done": True,
+        },
+    }
+    if inference_id:
+        payload["properties"]["inference_id"] = inference_id
+    try:
+        r = requests.post(
+            TAVUS_INTERACTIONS_ENDPOINT,
+            headers={"x-api-key": TAVUS_API_KEY, "Content-Type": "application/json"},
+            json=payload,
+            timeout=10,
+        )
+        try:
+            body_preview = r.text[:300]
+        except Exception:
+            body_preview = "<no body>"
+        print(f"[Webhook] Sent conversation.echo status={r.status_code} body={body_preview}")
+    except Exception as e:
+        print(f"[Webhook] Failed to send conversation.echo: {e}")
 
 
 def _s3_client_from_env() -> Optional[Any]:
@@ -504,6 +586,8 @@ async def tavus_callback(request: Request, background: BackgroundTasks):
             conv = str(payload.get("conversation_id") or "unknown")
             background.add_task(_upload_recording_to_s3, conv, rec_url)
         if tool_calls:
+            # Process synchronously so Tavus can receive results immediately in the HTTP response
+            tool_results = []
             for call in tool_calls:
                 evt = TavusEvent.model_validate({
                     **payload,
@@ -512,7 +596,53 @@ async def tavus_callback(request: Request, background: BackgroundTasks):
                     "timestamp": payload.get("timestamp") or time.time(),
                     "event_type": payload.get("event_type") or "tool_call",
                 })
-                background.add_task(process_event, evt)
+                try:
+                    result = handlers[call.name](evt)
+                except Exception as e:
+                    result = {"error": str(e)}
+                    print(f"[Webhook] Handler error for {call.name}: {e}")
+                tool_results.append({
+                    "tool": call.name,
+                    "tool_call_id": call.call_id,
+                    "arguments": call.arguments,
+                    "result": result,
+                })
+                # If we resolved a speaker name, optionally echo it back to Tavus so the replica speaks it
+                if call.name == "get_current_speaker":
+                    name = ""
+                    try:
+                        name = str((result or {}).get("display_name") or "").strip()
+                    except Exception:
+                        pass
+                    if name:
+                        inferred_text = f"You are {name}."
+                        inf_id = payload.get("inference_id") or call.call_id
+                        _broadcast_echo(str(payload.get("conversation_id") or ""), inferred_text, inference_id=inf_id)
+            # Mirror common tool-call response shapes: include both tool_results array and simplified mappings
+            # Primary shape: tool_calls array with id/name/result minimal payload
+            tool_calls_min = [
+                {"id": tr["tool_call_id"], "name": tr["tool"], "result": tr["result"]}
+                for tr in tool_results
+            ]
+            response_body: Dict[str, Any] = {
+                "ok": True,
+                "tool_calls": tool_calls_min,
+                "results": {tr["tool"]: tr["result"] for tr in tool_results},
+            }
+            # Legacy / exploratory shapes retained for compatibility (can remove later)
+            response_body["tool_results"] = tool_results
+            response_body["responses"] = [
+                {"tool_call_id": tr["tool_call_id"], "result": tr["result"]}
+                for tr in tool_results
+            ]
+            if len(tool_results) == 1:
+                response_body["tool_call_id"] = tool_results[0]["tool_call_id"]
+                response_body["result"] = tool_results[0]["result"]
+            try:
+                print(f"[Webhook] Responding with tool_results: {response_body}")
+            except Exception:
+                pass
+            return response_body
         else:
             # No tool calls found, still log the event type for visibility
             print(f"[Webhook] Received event_type={payload.get('event_type')} with no tool calls")
@@ -571,3 +701,10 @@ async def roster_register(request: Request):
 @app.get("/healthz")
 async def healthz():
     return {"status": "ok"}
+
+
+@app.get("/debug/roster/{conversation_id}")
+async def debug_roster(conversation_id: str):
+    """Inspect in-memory roster state for a conversation."""
+    entry = ROSTER.get(conversation_id)
+    return entry or {"participants": {}, "last_speaker_id": None, "last_speaker_name": None}
