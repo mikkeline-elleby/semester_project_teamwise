@@ -49,6 +49,17 @@ bin/tune.sh conversation --config configs/conversation/facilitator_kickoff.json
 
 - Daily diarization helper (for multi-speaker): start your webhook (`uvicorn app.main:app`), create a conversation with `enable_closed_captions: true` (example: `configs/conversation/demo_v2_conv_cc.json`), then open `http://localhost:8001/web-demo/daily_diarization.html` in a browser (serve it with `python -m http.server 8001`). Paste the `conversation_url`, set webhook base (default `http://localhost:8000`), join, and watch `/roster/register` updates + per-speaker CC logs.
 
+### Multi-speaker name recognition (Daily app-message path)
+- Terminal A: run webhook server `uvicorn app.main:app --host 0.0.0.0 --port 8000`.
+- Terminal B: serve the helper UI `python -m http.server 8001` and open `http://localhost:8001/web-demo/daily_diarization.html` (share LAN/ngrok URL if on different machines).
+- Terminal C: create a CC-enabled conversation `python tune.py conversation --config configs/conversation/demo_v2_conv_cc.json` and copy `conversation_url`.
+- In the helper (each participant):
+  - Paste the same `conversation_url`.
+  - Set webhook base (e.g., `http://localhost:8000`).
+  - Enter your display name and Join. This posts `/roster/register` so the webhook knows who is speaking.
+  - Leave one helper tab open to handle tool calls: it listens for Tavus `conversation.tool_call` events over Daily app-message and sends `conversation.echo` back (no REST echo required). When asked “what’s my name?”, it returns “You are <name>” for the active speaker.
+- Notes: keep `ENABLE_TAVUS_ECHO` off; echoes go over Daily data channel. Multiple participants can join; pick one “controller” tab to avoid duplicate echoes. Use `/debug/roster/<conversation_id>` to inspect server-side roster if needed.
+
 ## 4) Utilities
 
 ```bash
@@ -128,4 +139,3 @@ This is a quick guide to the important folders/files and what they do. Focus on 
 - Webhooks → run `uvicorn app.main:app`, expose via ngrok, then `bin/set_webhook_url.sh <public-url>`
 
 If you’d like more examples (e.g., composing multiple documents or layering tools), open an issue or drop a comment.
-
