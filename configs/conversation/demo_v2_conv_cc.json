@@ -1,9 +1,9 @@
 {
-    "persona_id": "p454ae6f041f",
+    "persona_id": "p6a7091dd112",
     "replica_id": "",
     "conversation_name": "Demo Conversation (CC)",
-    "conversational_context": "",
-    "custom_greeting": "",
+    "conversational_context": "This is a short warm-up session testing diarization and name tracking. The facilitator will ask each participant their favorite color, affirm their answer by name, and call on the next person. Follow the system_prompt in the persona for all rules and behavior.",
+    "custom_greeting": "Hi, welcome everyone. I'll wait until you tell me to start, then we'll begin the warm-up.",
     "audio_only": false,
     "document_ids": [],
     "document_tags": [],
@@ -15,7 +15,7 @@
         "max_call_duration": 1800,
         "participant_left_timeout": 60,
         "participant_absent_timeout": 600,
-        "language": "multilingual",
+        "language": "english",
         "enable_closed_captions": true,
         "apply_greenscreen": false
     }

@@ -49,7 +49,12 @@
     let conversationId = null;
     let participants = {};
     let lastActivePeerId = null;
+    let lastSpokenPeerId = null;
+    let lastSpokenName = null;
+    let speakCounts = {};
     let lastRosterSnapshot = null;
+    let startScriptSent = false;
+    let rosterEchoSent = false;
 
     function logLine(msg) {
       const line = document.createElement("div");
@@ -73,12 +78,29 @@
       const id = p.session_id || p.peerId || p.id || null;
       const name = p.user_name || p.name || p.user_id || (id ? `user-${id.slice(-5)}` : "Unknown");
       if (id) participants[id] = { id, name };
+      const key = id || (name ? `name:${name.toLowerCase()}` : null);
+      if (key) {
+        const existing = speakCounts[key] || { id, name, count: 0 };
+        speakCounts[key] = { ...existing, id: id || existing.id, name: name || existing.name };
+      }
       return id ? { id, name } : null;
+    }
+
+    function bumpSpeakCount(id, name) {
+      const key = id || (name ? `name:${name.toLowerCase()}` : null);
+      if (!key) return;
+      const existing = speakCounts[key] || { id, name, count: 0 };
+      speakCounts[key] = { id: id || existing.id, name: name || existing.name, count: (existing.count || 0) + 1 };
     }
 
     async function registerRoster(p, active = false) {
       const entry = rememberParticipant(p);
       if (!entry || !conversationId) return;
+      if (active) {
+        lastSpokenPeerId = entry.id;
+        lastSpokenName = entry.name;
+        bumpSpeakCount(entry.id, entry.name);
+      }
       const body = {
         conversation_id: conversationId,
         display_name: entry.name,
@@ -102,17 +124,34 @@
       return participants[id] || null;
     }
 
-    function currentSpeakerName() {
-      // Prefer last active; else the only non-facilitator participant; else any participant
+    function currentSpeaker() {
+      // Only return a name when it came from the most recent spoken turn
+      if (lastSpokenPeerId && participants[lastSpokenPeerId]) {
+        return { name: participants[lastSpokenPeerId].name, confident: true };
+      }
+      if (lastSpokenName) {
+        return { name: lastSpokenName, confident: true };
+      }
+      return { name: "", confident: false };
+    }
+
+    function leastActiveParticipant() {
       const facilKeywords = ["assistant", "facilitator", "meeting facilitator", "teamwise"];
       const isFacil = (nm) => facilKeywords.some((k) => nm?.toLowerCase().includes(k));
-      if (lastActivePeerId && participants[lastActivePeerId]) {
-        return participants[lastActivePeerId].name;
+      // Seed counts with known participants (default 0)
+      Object.values(participants).forEach((p) => {
+        const key = p.id || (p.name ? `name:${p.name.toLowerCase()}` : null);
+        if (key && !speakCounts[key]) {
+          speakCounts[key] = { id: p.id, name: p.name, count: 0 };
+        }
+      });
+      const entries = Object.values(speakCounts).filter((e) => e && e.name && !isFacil(e.name));
+      if (!entries.length) {
+        const fallback = Object.values(participants).find((p) => p.name && !isFacil(p.name));
+        return fallback ? { ...fallback, count: 0 } : null;
       }
-      const nonFacil = Object.values(participants).find((p) => !isFacil(p.name || ""));
-      if (nonFacil) return nonFacil.name;
-      const any = Object.values(participants)[0];
-      return any ? any.name : "";
+      entries.sort((a, b) => (a.count || 0) - (b.count || 0));
+      return entries[0];
     }
 
     function sendEcho(text, inferenceId) {
@@ -141,13 +180,45 @@
       if (convId && !conversationId) conversationId = convId;
       const toolName = properties.name;
       if (toolName === "get_current_speaker") {
-        const name = currentSpeakerName() || "Guest";
-        sendEcho(`You are ${name}.`, inferenceId);
+        const { name, confident } = currentSpeaker();
+        if (name && confident) {
+          sendEcho(`Thanks for sharing that, ${name}.`, inferenceId);
+        }
+        return;
+      }
+      if (toolName === "get_speaker_name") {
+        const { name, confident } = currentSpeaker();
+        if (name && confident) {
+          sendEcho(name, inferenceId);
+        }
         return;
       }
       if (toolName === "get_roster") {
-        const rosterNames = Object.values(participants).map((p) => p.name).join(", ");
-        sendEcho(`Participants: ${rosterNames || "unknown"}.`, inferenceId);
+        if (!startScriptSent) {
+          const facilKeywords = ["assistant", "facilitator", "meeting facilitator", "teamwise"];
+          const filtered = Object.values(participants)
+            .map((p) => p.name)
+            .filter((nm) => nm && !facilKeywords.some((k) => nm.toLowerCase().includes(k)));
+          const rosterNames = filtered.join(", ");
+          if (rosterNames) {
+            // Also send the full intro script via echo (tied to this inferenceId for reliability)
+            let namesText = "everyone";
+            if (filtered.length === 1) namesText = filtered[0];
+            else if (filtered.length === 2) namesText = `${filtered[0]} and ${filtered[1]}`;
+            else if (filtered.length > 2) namesText = `${filtered.slice(0, -1).join(", ")}, and ${filtered[filtered.length - 1]}`;
+            const pick = filtered.length ? filtered[Math.floor(Math.random() * filtered.length)] : "";
+            const script = `Hi everyone, welcome. I'm glad to see ${namesText} here with us today. The goal of this short session is simple: it’s a chance for us to get to know each other a little better and create a good foundation for working together. To begin, I'd like us to create a shared starting point. We’ll go around and each person will say their name and one intention they have for today. Before sharing your own intention, please repeat the intention of the person before you — just as you heard it. I’ll start: I’m TeamWise, and my intention is to create the best group ever. ${pick ? `Would you like to go next, ${pick}?` : "Who would like to go next?"}`;
+            sendEcho(script, inferenceId);
+            startScriptSent = true;
+          }
+        }
+        return;
+      }
+      if (toolName === "get_least_active_participant") {
+        const least = leastActiveParticipant();
+        if (least?.name) {
+          sendEcho(`Call on ${least.name} next.`, inferenceId);
+        }
         return;
       }
       logLine(`Unhandled tool_call ${toolName || "<unknown>"}`);
@@ -162,7 +233,7 @@
       });
       call.on("active-speaker-change", (ev) => {
         lastActivePeerId = ev.activeSpeaker?.peerId || null;
-        const p = participantFromId(lastActivePeerId);
+        const p = participantFromId(lastActivePeerId) || ev.activeSpeaker;
         if (p) registerRoster(p, true);
       });
       call.on("transcription-started", () => logLine("Captions ON"));
@@ -171,12 +242,76 @@
         const msg = ev.message || ev;
         const text = msg.text || "";
         const speaker = msg.participant || participantFromId(lastActivePeerId);
+        const speakerId =
+          speaker?.session_id ||
+          speaker?.peerId ||
+          speaker?.id ||
+          (typeof msg.participant === "string" ? msg.participant : null) ||
+          null;
         if (text) {
-          const label = speaker?.user_name || speaker?.name || speaker?.user_id || participantFromId(lastActivePeerId)?.name || "Unknown";
+          const label =
+            speaker?.user_name ||
+            speaker?.name ||
+            speaker?.user_id ||
+            participantFromId(lastActivePeerId)?.name ||
+            lastSpokenName ||
+            "Unknown";
           logLine(`[CC] ${label}: ${text}${msg.is_final ? "" : " (interim)"}`);
         }
-        if (msg.is_final && msg.participant) {
-          registerRoster(msg.participant, true);
+        if (speaker) {
+          // Track last spoken on both interim and final to keep current speaker accurate
+          lastSpokenPeerId = speakerId || lastSpokenPeerId;
+          lastSpokenName =
+            speaker?.user_name ||
+            speaker?.name ||
+            speaker?.user_id ||
+            lastSpokenName;
+          if (msg.is_final) {
+            registerRoster({ ...(speaker || {}), id: speakerId }, true);
+            bumpSpeakCount(speakerId, lastSpokenName);
+            // Start script trigger
+            const t = (text || "").toLowerCase();
+            if (!startScriptSent && (t.includes("start") || t.includes("we can start"))) {
+              const facilKeywords = ["assistant", "facilitator", "meeting facilitator", "teamwise"];
+              const names = Object.values(participants)
+                .map((p) => p.name)
+                .filter((nm) => nm && !facilKeywords.some((k) => nm.toLowerCase().includes(k)));
+              let namesText = "everyone";
+              if (names.length === 1) {
+                namesText = names[0];
+              } else if (names.length === 2) {
+                namesText = `${names[0]} and ${names[1]}`;
+              } else if (names.length > 2) {
+                namesText = `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
+              }
+              const pick = names.length ? names[Math.floor(Math.random() * names.length)] : "";
+              startScriptSent = true;
+              rosterEchoSent = true;
+            }
+            // Check if participant asked "what's my name?" and send identity echo
+            const textLower = text.toLowerCase();
+            if ((textLower.includes("what") && textLower.includes("my name")) ||
+                (textLower.includes("who") && textLower.includes("am i")) ||
+                (textLower.includes("my name"))) {
+              if (lastSpokenName) {
+                sendEcho(`You are ${lastSpokenName}`);
+              }
+            }
+          }
+          // Emit an app-message hint with the latest speaker for the model/tools
+          try {
+            frame.sendAppMessage({
+              event_type: "conversation.speaker_hint",
+              conversation_id: conversationId,
+              properties: {
+                participant_id: speakerId || "",
+                display_name: lastSpokenName || "",
+                confident: Boolean(lastSpokenName),
+              },
+            }, "*");
+          } catch (e) {
+            // ignore
+          }
         }
       });
       // Listen for interactions protocol over app-message (Tavus tool calls)

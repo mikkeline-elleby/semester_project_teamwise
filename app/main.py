@@ -96,6 +96,14 @@ ROSTER: Dict[str, Dict[str, Any]] = {}
 TAVUS_INTERACTIONS_ENDPOINT = os.getenv("TAVUS_INTERACTIONS_ENDPOINT", "https://tavusapi.com/v2/interactions")
 ENABLE_TAVUS_ECHO = (os.getenv("ENABLE_TAVUS_ECHO") or "").lower() in ("1", "true", "yes")
 TAVUS_API_KEY = os.getenv("TAVUS_API_KEY") or ""
+ACK_TEMPLATES = [
+    "Thanks for sharing that, {name}.",
+    "Appreciate that, {name}.",
+    "Nice choice, {name}.",
+    "Great point, {name}.",
+    "Good to know, {name}.",
+    "Glad you shared, {name}.",
+]
 
 
 def register_tool(name: str):
@@ -238,6 +246,7 @@ def handle_get_current_speaker(payload: TavusEvent) -> Dict[str, Any]:
     transcript = props.get("transcript") if isinstance(props, dict) else None
     current_name = None
     current_id = None
+    confident = False
     if isinstance(transcript, list) and transcript:
         for msg in reversed(transcript):
             if not isinstance(msg, dict):
@@ -246,32 +255,16 @@ def handle_get_current_speaker(payload: TavusEvent) -> Dict[str, Any]:
             if role in ("user", "participant", "speaker", "human"):
                 current_name = _speaker_label_from_msg(msg)
                 current_id = _speaker_id_from_msg(msg)
+                confident = bool(current_name)
                 break
     # Fallback to roster memory
     if (not current_name) and conv_id and conv_id in ROSTER:
         entry = ROSTER[conv_id]
         current_name = entry.get("last_speaker_name")
         current_id = entry.get("last_speaker_id")
-    if conv_id and conv_id in ROSTER:
-        entry = ROSTER[conv_id]
-        participants = entry.get("participants", {}) or {}
-        facilitator_tokens = {"assistant", "facilitator", "meeting facilitator", "teamwise"}
-        def _is_facilitator(name: str) -> bool:
-            n = name.lower()
-            return any(tok in n for tok in facilitator_tokens)
+        confident = bool(current_name)
 
-        # If nothing found, or we picked the facilitator, choose a non-facilitator participant if one exists
-        if (not current_name) or _is_facilitator(current_name):
-            for pid, nm in participants.items():
-                if nm and not _is_facilitator(nm):
-                    current_id, current_name = pid, nm
-                    break
-        # If still nothing and there is exactly one participant, assume they are current speaker
-        if (not current_name) and len(participants) == 1:
-            only_pid, only_nm = list(participants.items())[0]
-            current_id, current_name = only_pid, only_nm
-
-    result = {"participant_id": current_id or "", "display_name": current_name or ""}
+    result = {"participant_id": current_id or "", "display_name": current_name or "", "confident": bool(confident)}
     try:
         print(f"[get_current_speaker] conv={conv_id} result={result} roster_size={len(ROSTER.get(conv_id, {}).get('participants', {}))} roster_keys={list(ROSTER.keys())}")
     except Exception:
@@ -607,15 +600,17 @@ async def tavus_callback(request: Request, background: BackgroundTasks):
                     "arguments": call.arguments,
                     "result": result,
                 })
-                # If we resolved a speaker name, optionally echo it back to Tavus so the replica speaks it
-                if call.name == "get_current_speaker":
-                    name = ""
+                # Optional varied affirmation echo when we know the current speaker with confidence
+                if call.name == "get_current_speaker" and ENABLE_TAVUS_ECHO and ACK_TEMPLATES:
                     try:
                         name = str((result or {}).get("display_name") or "").strip()
+                        confident = bool((result or {}).get("confident"))
                     except Exception:
-                        pass
-                    if name:
-                        inferred_text = f"You are {name}."
+                        name = ""
+                        confident = False
+                    if name and confident:
+                        import random
+                        inferred_text = random.choice(ACK_TEMPLATES).format(name=name)
                         inf_id = payload.get("inference_id") or call.call_id
                         _broadcast_echo(str(payload.get("conversation_id") or ""), inferred_text, inference_id=inf_id)
             # Mirror common tool-call response shapes: include both tool_results array and simplified mappings
@@ -691,10 +686,16 @@ async def roster_register(request: Request):
     entry = ROSTER.setdefault(conv_id, {"participants": {}, "last_speaker_id": None, "last_speaker_name": None})
     # Use participant_id if provided, else fall back to name as a synthetic key
     key = pid if pid else f"name:{name.lower()}"
+    # Check if this is a new participant
+    is_new = key not in entry["participants"]
     entry["participants"][key] = name
     if active:
         entry["last_speaker_id"] = key
         entry["last_speaker_name"] = name
+    # Send intro echo when new participant joins (if ENABLE_TAVUS_ECHO is on)
+    if is_new and ENABLE_TAVUS_ECHO:
+        intro_text = f"{name} has joined the call"
+        _broadcast_echo(conv_id, intro_text)
     return {"ok": True, "conversation_id": conv_id, "participant_id": key, "display_name": name, "active": active}
 
 
