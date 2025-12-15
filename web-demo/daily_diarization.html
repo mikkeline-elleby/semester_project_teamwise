@@ -188,7 +188,7 @@
       }
       if (toolName === "get_speaker_name") {
         const { name, confident } = currentSpeaker();
-        if (name && confident) {
+        if (name ) {
           sendEcho(name, inferenceId);
         }
         return;
