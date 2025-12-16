@@ -1,0 +1,17 @@
+{
+  "type": "function",
+  "function": {
+    "name": "get_least_active_participant",
+    "description": "Identifies the participant who has spoken the least so far.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "description": "The reason for calling this tool."
+        }
+      },
+      "required": ["reason"]
+    }
+  }
+}

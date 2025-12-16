@@ -160,6 +160,42 @@ def handle_print_message(payload: TavusEvent) -> Dict[str, Any]:
     return {"printed": True}
 
 
+@register_tool("initiate_introduction")
+def handle_initiate_introduction(payload: TavusEvent) -> Dict[str, Any]:
+    print("[Webhook] Received initiate_introduction tool call. Frontend will handle script echo.")
+    return {"status": "triggered"}
+
+
+@register_tool("start_picnic_game")
+def handle_start_picnic_game(payload: TavusEvent) -> Dict[str, Any]:
+    print("[Webhook] Received start_picnic_game tool call. Frontend will handle script echo.")
+    return {"status": "triggered"}
+
+
+@register_tool("start_morning_enjoyment_round")
+def handle_start_morning_enjoyment_round(payload: TavusEvent) -> Dict[str, Any]:
+    print("[Webhook] Received start_morning_enjoyment_round tool call. Frontend will handle script echo.")
+    return {"status": "triggered"}
+
+
+@register_tool("start_fun_skill_round")
+def handle_start_fun_skill_round(payload: TavusEvent) -> Dict[str, Any]:
+    print("[Webhook] Received start_fun_skill_round tool call. Frontend will handle script echo.")
+    return {"status": "triggered"}
+
+
+@register_tool("start_shared_preference_task")
+def handle_start_shared_preference_task(payload: TavusEvent) -> Dict[str, Any]:
+    print("[Webhook] Received start_shared_preference_task tool call. Frontend will handle script echo.")
+    return {"status": "triggered"}
+
+
+@register_tool("transition_to_next_session")
+def handle_transition_to_next_session(payload: TavusEvent) -> Dict[str, Any]:
+    print("[Webhook] Received transition_to_next_session tool call. Frontend will handle script echo.")
+    return {"status": "triggered"}
+
+
 def _speaker_label_from_msg(m: Dict[str, Any]) -> Optional[str]:
     # Common keys seen across providers/schemas
     for k in ("display_name", "displayName", "name", "speaker_name", "speakerName"):

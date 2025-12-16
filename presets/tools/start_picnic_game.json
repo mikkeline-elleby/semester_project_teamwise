@@ -1,0 +1,17 @@
+{
+  "type": "function",
+  "function": {
+    "name": "start_picnic_game",
+    "description": "Starts the picnic game phase of the icebreaker session.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "description": "The reason for calling this tool."
+        }
+      },
+      "required": ["reason"]
+    }
+  }
+}

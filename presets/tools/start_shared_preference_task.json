@@ -1,0 +1,17 @@
+{
+  "type": "function",
+  "function": {
+    "name": "start_shared_preference_task",
+    "description": "Starts the shared preference consensus task of the icebreaker session.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "description": "The reason for calling this tool."
+        }
+      },
+      "required": ["reason"]
+    }
+  }
+}

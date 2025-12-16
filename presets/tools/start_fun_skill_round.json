@@ -1,0 +1,17 @@
+{
+  "type": "function",
+  "function": {
+    "name": "start_fun_skill_round",
+    "description": "Starts the fun skill sharing round of the icebreaker session.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "description": "The reason for calling this tool."
+        }
+      },
+      "required": ["reason"]
+    }
+  }
+}

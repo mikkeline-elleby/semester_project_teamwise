@@ -1,8 +1,8 @@
 {
-  "persona_id": "pcf822450c6d",
+  "persona_id": "pe9931a992b0",
   "replica_id": "",
   "conversation_name": "Introductory Meeting (CC)",
-  "conversational_context": "",
+  "conversational_context": "This conversation tests diarization, name usage, topic selection, and icebreaker rounds. The facilitator will wait for the participant to say 'start'. After that, it will fetch the roster, greet all participants by name, guide them through topic selection, affirm each contribution using speaker names via get_current_speaker, then run an icebreaker based on the chosen topic, and close once everyone has shared.",
   "custom_greeting": "Hi, welcome everyone. Let me know when you're ready to begin.",
   "audio_only": false,
   "document_ids": [],

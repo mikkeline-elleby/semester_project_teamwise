@@ -1,0 +1,17 @@
+{
+  "type": "function",
+  "function": {
+    "name": "start_morning_enjoyment_round",
+    "description": "Starts the morning enjoyment round of the icebreaker session.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "description": "The reason for calling this tool."
+        }
+      },
+      "required": ["reason"]
+    }
+  }
+}

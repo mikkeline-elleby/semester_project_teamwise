@@ -1,0 +1,17 @@
+{
+  "type": "function",
+  "function": {
+    "name": "initiate_introduction",
+    "description": "Initiates the introduction phase of the icebreaker session.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "description": "The reason for calling this tool."
+        }
+      },
+      "required": ["reason"]
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "type": "function",
+  "function": {
+    "name": "transition_to_next_session",
+    "description": "Transitions the group to the next session after the icebreaker concludes.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "description": "The reason for calling this tool."
+        }
+      },
+      "required": ["reason"]
+    }
+  }
+}
