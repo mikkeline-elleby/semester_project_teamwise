@@ -29,7 +29,18 @@
       <input id="webhook-base" value="http://localhost:8000" />
       <label for="display-name">Your display name</label>
       <input id="display-name" placeholder="Alex" />
-      <button id="join-btn">Join and listen</button>
+      <div style="display: flex; gap: 10px;">
+        <button id="join-btn">Join and listen</button>
+        <button id="start-btn" disabled>Start Icebreaker</button>
+      </div>
+      <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px;">
+        <button id="btn-intro" class="phase-btn" disabled style="background:#4a5568; color:#fff; font-size:12px; padding:6px 10px;">Intro</button>
+        <button id="btn-picnic" class="phase-btn" disabled style="background:#4a5568; color:#fff; font-size:12px; padding:6px 10px;">Picnic</button>
+        <button id="btn-morning" class="phase-btn" disabled style="background:#4a5568; color:#fff; font-size:12px; padding:6px 10px;">Morning</button>
+        <button id="btn-fun" class="phase-btn" disabled style="background:#4a5568; color:#fff; font-size:12px; padding:6px 10px;">Fun Skill</button>
+        <button id="btn-shared" class="phase-btn" disabled style="background:#4a5568; color:#fff; font-size:12px; padding:6px 10px;">Shared Pref</button>
+        <button id="btn-transition" class="phase-btn" disabled style="background:#4a5568; color:#fff; font-size:12px; padding:6px 10px;">End</button>
+      </div>
       <div class="note">Ensure the conversation config has enable_closed_captions=true. Start your FastAPI webhook (uvicorn app.main:app).</div>
       <div class="note">We post participant info to /roster/register to keep Tavus tools diarization-aware.</div>
       <div class="note">This version uses an echo queue to prevent the replica from getting cut off by back-to-back echoes.</div>
@@ -45,6 +56,15 @@
     const webhookInput = document.getElementById("webhook-base");
     const nameInput = document.getElementById("display-name");
     const joinBtn = document.getElementById("join-btn");
+    const startBtn = document.getElementById("start-btn");
+    
+    const btnIntro = document.getElementById("btn-intro");
+    const btnPicnic = document.getElementById("btn-picnic");
+    const btnMorning = document.getElementById("btn-morning");
+    const btnFun = document.getElementById("btn-fun");
+    const btnShared = document.getElementById("btn-shared");
+    const btnTransition = document.getElementById("btn-transition");
+    const phaseBtns = [btnIntro, btnPicnic, btnMorning, btnFun, btnShared, btnTransition];
 
     let frame = null;
     let conversationId = null;
@@ -53,7 +73,6 @@
     let lastSpokenPeerId = null;
     let lastSpokenName = null;
     let speakCounts = {};
-    let startScriptSent = false;
     let executedPhases = new Set();
 
     // --- Round-robin icebreaker state ---
@@ -223,7 +242,33 @@
 
     function afterEchoIdle(fn) {
       if (typeof fn !== "function") return;
-      onEchoIdleCallbacks.push(fn);
+
+      let executed = false;
+      const safeFn = () => {
+        if (executed) return;
+        executed = true;
+        fn();
+      };
+
+      onEchoIdleCallbacks.push(safeFn);
+
+      // Failsafe: force execution if stuck for too long (e.g. missed event)
+      setTimeout(() => {
+        if (!executed) {
+          logLine("Failsafe: forcing afterEchoIdle callback (timeout).");
+          
+          // If we timed out, the replica state might be stuck. Reset it so the next message can send.
+          if (replicaSpeaking) {
+            logLine("Failsafe: resetting stuck replicaSpeaking flag to false.");
+            replicaSpeaking = false;
+          }
+
+          const idx = onEchoIdleCallbacks.indexOf(safeFn);
+          if (idx !== -1) onEchoIdleCallbacks.splice(idx, 1);
+          safeFn();
+        }
+      }, 6000);
+
       pumpEchoQueue();
     }
 
@@ -569,7 +614,7 @@
         return;
       }
 
-      if (toolName === "get_roster") return;
+            if (toolName === "get_roster") return;
       logLine(`Unhandled tool_call ${toolName || "<unknown>"}`);
     }
 
@@ -629,7 +674,24 @@
             if (lastSpokenName) enqueueEcho(`You are ${lastSpokenName}`);
           }
 
+          // Keyword trigger: "start" or "begin"
+          // Only if we haven't started yet (no phases executed)
+          if (executedPhases.size === 0) {
+             const words = textLower.split(/\s+/);
+             if (words.includes("start") || words.includes("begin") || textLower.includes("let's start")) {
+                 logLine(`Heard start command from ${lastSpokenName || "someone"}`);
+                 handleToolCall({ properties: { name: "initiate_introduction" } });
+             }
+          }
+
           // Round-robin advancement
+          if (roundState.active) {
+             const pName = participants[speakerId]?.name || "Unknown";
+             const isFacil = pName && isFacilName(pName);
+             const currentName = participants[roundState.currentId]?.name || "None";
+             logLine(`[RR Check] Speaker: ${pName} (${speakerId}) vs Current: ${currentName} (${roundState.currentId})`);
+          }
+
           if (roundState.active && speakerId && participants[speakerId] && !isFacilName(participants[speakerId].name)) {
             const spokenText = (text || "").trim();
             if (spokenText.length > 1) {
@@ -643,6 +705,8 @@
                   // Queue thanks + next prompt (won't cut off)
                   enqueueEcho(`Thanks, ${displayName}.`);
                   promptNext();
+                } else {
+                   logLine(`Ignored input from ${participants[speakerId]?.name} (already completed round)`);
                 }
               } else {
                 const expectedName = participants[roundState.currentId]?.name || "the next person";
@@ -721,11 +785,30 @@
         await frame.join({ url, userName: name });
         logLine("Joined meeting. Talk in two tabs to see diarization.");
         registerRoster(frame?.participants().local, true);
+        startBtn.disabled = false;
+        phaseBtns.forEach(b => b.disabled = false);
       } catch (err) {
         logLine(`Join failed: ${err}`);
         joinBtn.disabled = false;
       }
     });
+
+    startBtn.addEventListener("click", () => {
+      if (executedPhases.size > 0) {
+        logLine("Icebreaker already started.");
+        return;
+      }
+      logLine("Manual start triggered.");
+      handleToolCall({ properties: { name: "initiate_introduction" } });
+      startBtn.disabled = true;
+    });
+
+    btnIntro.onclick = () => handleToolCall({ properties: { name: "initiate_introduction" } });
+    btnPicnic.onclick = () => handleToolCall({ properties: { name: "start_picnic_game" } });
+    btnMorning.onclick = () => handleToolCall({ properties: { name: "start_morning_enjoyment_round" } });
+    btnFun.onclick = () => handleToolCall({ properties: { name: "start_fun_skill_round" } });
+    btnShared.onclick = () => handleToolCall({ properties: { name: "start_shared_preference_task" } });
+    btnTransition.onclick = () => handleToolCall({ properties: { name: "transition_to_next_session" } });
   </script>
 </body>
 </html>
