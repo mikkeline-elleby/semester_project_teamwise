@@ -37,7 +37,6 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 Terminal B (tunnel + persist):
 ```bash
 ngrok http 8000
-bin/set_webhook_url.sh "https://<your-ngrok>.ngrok-free.app/tavus/callback"
 ```
 
 Terminal C (create conversation):
