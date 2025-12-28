@@ -64,6 +64,8 @@
     <button id="start-btn" class="btn-secondary" disabled>Start Icebreaker</button>
     <button id="replica-off-btn" class="btn-danger" disabled>Replica Off</button>
     <button id="replica-stop-btn" class="btn-danger" disabled>Stop Speaking</button>
+    <div style="width: 1px; height: 20px; background: #333; margin: 0 8px;"></div>
+    <button id="record-btn" class="btn-secondary" disabled>⏺ Record</button>
     <div style="flex:1"></div>
     <div style="font-size: 12px; color: #666;">Tavus Custom UI</div>
   </div>
@@ -121,6 +123,7 @@
     let speakCounts = {};
     let lastSpokenPeerId = null;
     let lastSpokenName = null;
+    let recordingState = { active: false, id: null };
 
     // Round Robin State
     let roundState = {
@@ -143,6 +146,7 @@
     const startBtn = document.getElementById("start-btn");
     const replicaOffBtn = document.getElementById("replica-off-btn");
     const replicaStopBtn = document.getElementById("replica-stop-btn");
+    const recordBtn = document.getElementById("record-btn");
     const btnMic = document.getElementById("btn-mic");
     const btnCam = document.getElementById("btn-cam");
     const btnScreen = document.getElementById("btn-screen");
@@ -305,6 +309,21 @@
       const events = ["participant-joined", "participant-updated", "participant-left", "track-started", "track-stopped"];
       events.forEach(e => call.on(e, updateUI));
 
+      // Recording Events
+      call.on("recording-started", (e) => {
+        recordingState.active = true;
+        recordingState.id = e.recordingId;
+        updateRecordUI();
+        logLine("Recording STARTED");
+      });
+      call.on("recording-stopped", () => {
+        recordingState.active = false;
+        recordingState.id = null;
+        updateRecordUI();
+        logLine("Recording STOPPED");
+      });
+      call.on("recording-error", (e) => logLine(`Recording Error: ${e.errorMsg}`));
+
       call.on("active-speaker-change", (ev) => {
         activeSpeakerId = ev.activeSpeaker?.peerId;
         updateUI();
@@ -336,6 +355,18 @@
       btnCam.textContent = video ? "📷" : "videocam_off";
       
       btnScreen.classList.toggle("active", screen);
+    }
+
+    function updateRecordUI() {
+      if (recordingState.active) {
+        recordBtn.textContent = "⏹ Stop Rec";
+        recordBtn.classList.remove("btn-secondary");
+        recordBtn.classList.add("btn-danger");
+      } else {
+        recordBtn.textContent = "⏺ Record";
+        recordBtn.classList.remove("btn-danger");
+        recordBtn.classList.add("btn-secondary");
+      }
     }
 
     // --- Tavus Logic (Restored) ---
@@ -748,6 +779,7 @@
         startBtn.disabled = false;
         replicaOffBtn.disabled = false;
         replicaStopBtn.disabled = false;
+        recordBtn.disabled = false;
         updateUI();
       } catch (e) {
         logLine(`Error: ${e}`);
@@ -819,6 +851,23 @@
     replicaStopBtn.onclick = () => {
         broadcastReplicaStop();
         applyReplicaStopLocally();
+    };
+
+    recordBtn.onclick = async () => {
+      if (!callObject) return;
+      recordBtn.disabled = true;
+      try {
+        if (recordingState.active) {
+           logLine("Stopping recording...");
+           await callObject.stopRecording();
+        } else {
+           logLine("Starting recording...");
+           await callObject.startRecording();
+        }
+      } catch (e) {
+        logLine(`Recording Action Failed: ${e}`);
+      }
+      recordBtn.disabled = false;
     };
 
     btnMic.onclick = () => callObject.setLocalAudio(!callObject.participants().local.audio);
