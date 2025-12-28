@@ -63,6 +63,7 @@
     <div style="width: 1px; height: 20px; background: #333; margin: 0 8px;"></div>
     <button id="start-btn" class="btn-secondary" disabled>Start Icebreaker</button>
     <button id="replica-off-btn" class="btn-danger" disabled>Replica Off</button>
+    <button id="replica-stop-btn" class="btn-danger" disabled>Stop Speaking</button>
     <div style="flex:1"></div>
     <div style="font-size: 12px; color: #666;">Tavus Custom UI</div>
   </div>
@@ -141,6 +142,7 @@
     const joinBtn = document.getElementById("join-btn");
     const startBtn = document.getElementById("start-btn");
     const replicaOffBtn = document.getElementById("replica-off-btn");
+    const replicaStopBtn = document.getElementById("replica-stop-btn");
     const btnMic = document.getElementById("btn-mic");
     const btnCam = document.getElementById("btn-cam");
     const btnScreen = document.getElementById("btn-screen");
@@ -155,6 +157,14 @@
     }
 
     // --- Helpers ---
+    function parseConversationId(url) {
+      try {
+        const u = new URL(url);
+        const parts = u.pathname.split("/").filter(Boolean);
+        return parts[0] || null;
+      } catch (e) { return null; }
+    }
+
     function isFacilName(nm) {
       return facilKeywords.some((k) => (nm || "").toLowerCase().includes(k));
     }
@@ -180,6 +190,13 @@
       allParticipants.forEach(p => {
         if (p.local) return; // Local audio handled by browser/system
         
+        // If replica is disabled, strictly enforce silence by ignoring its track
+        if (replicaDisabled && isReplica(p)) {
+            const existing = document.getElementById(`audio-${p.session_id}`);
+            if (existing) existing.remove();
+            return;
+        }
+
         let audioEl = document.getElementById(`audio-${p.session_id}`);
         const audioTrack = getTrack(p, "audio");
         
@@ -581,6 +598,12 @@
 
     function handleAppMessage(ev) {
       const data = ev?.data || {};
+      
+      if (data.event_type === "conversation.interrupt") {
+          applyReplicaStopLocally();
+          return;
+      }
+
       if (data.event_type === "conversation.tool_call") handleToolCall(data);
       if (data.event_type?.includes("started_speaking")) {
           replicaSpeaking = true;
@@ -676,6 +699,7 @@
         callObject.sendAppMessage({
           message_type: "conversation",
           event_type: "conversation.echo",
+          conversation_id: conversationId,
           properties: { text: item.text, modality: "text", done: true, inference_id: item.inferenceId }
         }, "*");
         logLine(`Echo sent: ${item.text}`);
@@ -709,7 +733,9 @@
     joinBtn.onclick = async () => {
       const url = document.getElementById("conversation-url").value;
       const name = document.getElementById("display-name").value;
-      if (!url) return alert("URL required");
+      conversationId = parseConversationId(url);
+
+      if (!url || !conversationId) return alert("Invalid URL or ID");
       
       joinBtn.disabled = true;
       
@@ -721,6 +747,7 @@
         logLine("Joined!");
         startBtn.disabled = false;
         replicaOffBtn.disabled = false;
+        replicaStopBtn.disabled = false;
         updateUI();
       } catch (e) {
         logLine(`Error: ${e}`);
@@ -746,6 +773,52 @@
       });
       replicaOffBtn.textContent = "Replica Off (Active)";
       replicaOffBtn.disabled = true;
+    };
+
+    // --- Stop Speaking Logic ---
+    function applyReplicaStopLocally() {
+      if (replicaDisabled) return;
+      replicaDisabled = true;
+      ignoreToolCalls = true;
+      echoQueue = [];
+      echoSending = false;
+      replicaSpeaking = false;
+      
+      logLine("STOP SPEAKING triggered. Silencing replica.");
+
+      if (callObject) {
+        const all = callObject.participants();
+        Object.values(all).forEach(p => {
+          if (isReplica(p)) {
+             callObject.updateParticipant(p.session_id, { setAudio: false, setVideo: false });
+             logLine(`Unsubscribed from replica: ${p.user_name}`);
+          }
+        });
+      }
+      
+      if (replicaStopBtn) {
+          replicaStopBtn.textContent = "Stop Speaking (Active)";
+          replicaStopBtn.disabled = true;
+      }
+      if (replicaOffBtn) {
+          replicaOffBtn.textContent = "Replica Off (Active)";
+          replicaOffBtn.disabled = true;
+      }
+    }
+
+    function broadcastReplicaStop() {
+        if (!callObject || !conversationId) return;
+        logLine("Sending Tavus Interrupt...");
+        callObject.sendAppMessage({
+            message_type: "conversation",
+            event_type: "conversation.interrupt",
+            conversation_id: conversationId
+        }, "*");
+    }
+
+    replicaStopBtn.onclick = () => {
+        broadcastReplicaStop();
+        applyReplicaStopLocally();
     };
 
     btnMic.onclick = () => callObject.setLocalAudio(!callObject.participants().local.audio);
