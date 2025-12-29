@@ -57,18 +57,13 @@
 
   <!-- Top Config Panel -->
   <div id="config-panel">
-    <button id="create-room-btn" class="btn-primary">Create Public Room</button>
+    <input id="conversation-url" placeholder="Conversation URL" />
+    <input id="display-name" placeholder="Your Name" value="Guest" />
+    <button id="join-btn" class="btn-primary">Join</button>
     <div style="width: 1px; height: 20px; background: #333; margin: 0 8px;"></div>
-    <input id="conversation-url" placeholder="Room URL" />
-    <button id="copy-link-btn" class="btn-secondary" title="Copy Link">📋</button>
-    <input id="display-name" placeholder="Your Name" value="Host" />
-    <button id="join-host-btn" class="btn-secondary" disabled>Join as Host (Owner)</button>
-    <button id="join-part-btn" class="btn-secondary" disabled>Join as Participant</button>
-    <div style="width: 1px; height: 20px; background: #333; margin: 0 8px;"></div>
-    <button id="start-replica-btn" class="btn-primary" disabled>Start Replica (Task 1)</button>
-    <button id="eject-replica-btn" class="btn-danger" disabled>Eject Replica (Task 2)</button>
-    <div style="width: 1px; height: 20px; background: #333; margin: 0 8px;"></div>
-    <button id="list-participants-btn" class="btn-secondary" disabled>List Participants</button>
+    <button id="start-btn" class="btn-secondary" disabled>Start Icebreaker</button>
+    <button id="replica-off-btn" class="btn-danger" disabled>Replica Off</button>
+    <button id="replica-stop-btn" class="btn-danger" disabled>Stop Speaking</button>
     <div style="width: 1px; height: 20px; background: #333; margin: 0 8px;"></div>
     <button id="record-btn" class="btn-secondary" disabled>⏺ Record</button>
     <div style="flex:1"></div>
@@ -147,21 +142,15 @@
     const audioContainer = document.getElementById("audio-container");
     
     // Buttons
-    const createRoomBtn = document.getElementById("create-room-btn");
-    const copyLinkBtn = document.getElementById("copy-link-btn");
-    const joinHostBtn = document.getElementById("join-host-btn");
-    const joinPartBtn = document.getElementById("join-part-btn");
-    const startReplicaBtn = document.getElementById("start-replica-btn");
-    const ejectReplicaBtn = document.getElementById("eject-replica-btn");
-    const listParticipantsBtn = document.getElementById("list-participants-btn");
+    const joinBtn = document.getElementById("join-btn");
+    const startBtn = document.getElementById("start-btn");
+    const replicaOffBtn = document.getElementById("replica-off-btn");
+    const replicaStopBtn = document.getElementById("replica-stop-btn");
     const recordBtn = document.getElementById("record-btn");
     const btnMic = document.getElementById("btn-mic");
     const btnCam = document.getElementById("btn-cam");
     const btnScreen = document.getElementById("btn-screen");
     const btnLeave = document.getElementById("btn-leave");
-
-    // Tokens
-    let tokens = { host: null, bot: null };
 
     // --- Logging ---
     function logLine(msg) {
@@ -180,14 +169,12 @@
       } catch (e) { return null; }
     }
 
-    const BOT_NAME = "Replica";
-
     function isFacilName(nm) {
       return facilKeywords.some((k) => (nm || "").toLowerCase().includes(k));
     }
 
     function isReplica(p) {
-      return !p.local && (p.user_name||"").toLowerCase() === BOT_NAME.toLowerCase();
+      return !p.local && isFacilName(p.user_name);
     }
 
     function getHumanSessionIds() {
@@ -798,138 +785,6 @@
     }
 
     // --- Button Actions ---
-    
-    createRoomBtn.onclick = async () => {
-        createRoomBtn.disabled = true;
-        logLine("Creating public room...");
-        try {
-            const res = await fetch("http://localhost:8000/daily/session", { 
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ expires_in_minutes: 180 })
-            });
-            if (!res.ok) throw new Error(await res.text());
-            const data = await res.json();
-            
-            document.getElementById("conversation-url").value = data.room_url;
-            tokens.host = data.host_token;
-            tokens.bot = data.bot_token;
-            
-            joinHostBtn.disabled = false;
-            joinPartBtn.disabled = false;
-            logLine(`Room created: ${data.room_name}`);
-            logLine(`Share Link: ${data.room_url}`);
-        } catch (e) {
-            logLine(`Error creating room: ${e}`);
-            createRoomBtn.disabled = false;
-        }
-    };
-
-    copyLinkBtn.onclick = () => {
-        const url = document.getElementById("conversation-url").value;
-        if (url) {
-            navigator.clipboard.writeText(url);
-            logLine("Link copied to clipboard");
-        }
-    };
-
-    async function joinRoom(token, name) {
-      const url = document.getElementById("conversation-url").value;
-      if (!url) return alert("Invalid URL");
-      
-      joinHostBtn.disabled = true;
-      joinPartBtn.disabled = true;
-      
-      callObject = window.DailyIframe.createCallObject();
-      wireEvents(callObject);
-      
-      try {
-        const joinOptions = { url, userName: name };
-        if (token) joinOptions.token = token;
-        
-        await callObject.join(joinOptions);
-        logLine(`Joined as ${name}!`);
-        
-        // Enable controls based on role
-        if (token === tokens.host) {
-            startReplicaBtn.disabled = false;
-            ejectReplicaBtn.disabled = false;
-            recordBtn.disabled = false;
-          listParticipantsBtn.disabled = false;
-            logLine("Host mode active (Owner)");
-        } else {
-            logLine("Participant mode active");
-          listParticipantsBtn.disabled = false;
-        }
-        
-        updateUI();
-      } catch (e) {
-        logLine(`Error joining: ${e}`);
-        joinHostBtn.disabled = false;
-        joinPartBtn.disabled = false;
-        listParticipantsBtn.disabled = true;
-      }
-    }
-
-    joinHostBtn.onclick = () => joinRoom(tokens.host, "Host");
-    joinPartBtn.onclick = () => joinRoom(null, "Participant");
-
-    startReplicaBtn.onclick = async () => {
-        const url = document.getElementById("conversation-url").value;
-        if (!url || !tokens.bot) return logLine("Missing URL or Bot Token");
-        
-        startReplicaBtn.disabled = true;
-        logLine("Starting Replica Bot...");
-        try {
-            const res = await fetch("http://localhost:8000/bot/start", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    room_url: url,
-                    bot_token: tokens.bot,
-                    bot_name: BOT_NAME
-                })
-            });
-            if (!res.ok) throw new Error(await res.text());
-            logLine("Replica Bot Started (Task 1)");
-        } catch (e) {
-            logLine(`Error starting bot: ${e}`);
-            startReplicaBtn.disabled = false;
-        }
-    };
-
-    ejectReplicaBtn.onclick = async () => {
-        if (!callObject) return;
-        
-        // 1. Try to stop the bot process first
-        const url = document.getElementById("conversation-url").value;
-        if (url) {
-             try {
-                await fetch("http://localhost:8000/bot/stop", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ room_url: url })
-                });
-                logLine("Bot process stop signal sent.");
-             } catch (e) {}
-        }
-
-        // 2. Eject from meeting (Owner only)
-        const participants = callObject.participants();
-        const replica = Object.values(participants).find(p => isReplica(p));
-        
-        if (replica) {
-            logLine(`Ejecting replica: ${replica.user_name}`);
-            callObject.updateParticipant(replica.session_id, { eject: true });
-            logLine("Replica ejected (Task 2 Ready)");
-        } else {
-            logLine("Replica not found in roster.");
-        }
-        
-        startReplicaBtn.disabled = false;
-    };
-
-    /*
     joinBtn.onclick = async () => {
       const url = document.getElementById("conversation-url").value;
       const name = document.getElementById("display-name").value;
@@ -975,9 +830,6 @@
       replicaOffBtn.textContent = "Replica Off (Active)";
       replicaOffBtn.disabled = true;
     };
-    */
-
-    // --- Stop Speaking Logic ---
 
     // --- Stop Speaking Logic ---
     function applyReplicaStopLocally() {
@@ -1061,20 +913,7 @@
        stageVideo.srcObject = null;
        joinBtn.disabled = false;
        logLine("Left call.");
-       listParticipantsBtn.disabled = true;
     };
-
-     listParticipantsBtn.onclick = () => {
-        if (!callObject) return logLine("No active call; join first.");
-        const roster = callObject.participants() || {};
-        const entries = Object.values(roster);
-        logLine(`Participants (${entries.length}):`);
-        entries.forEach((p) => {
-          const pid = p.session_id || p.id || "unknown";
-          const pname = p.user_name || p.name || p.user_id || "";
-          logLine(`- ${pid} | ${pname || "(no name)"} | local=${p.local ? "yes" : "no"}`);
-        });
-     };
 
   </script>
 </body>

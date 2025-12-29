@@ -14,13 +14,41 @@ import boto3
 import requests
 from pathlib import Path
 from dotenv import load_dotenv
+import subprocess
+import sys
 
 # Load environment variables from a local .env file (development convenience)
 load_dotenv()
 
 
 APP_SECRET = os.getenv("WEBHOOK_SHARED_SECRET", "")
+DAILY_API_KEY = os.getenv("DAILY_API_KEY")
+DAILY_DOMAIN = os.getenv("DAILY_DOMAIN")
 
+# Bot Process Registry
+bot_processes: Dict[str, subprocess.Popen] = {}
+
+class DailySessionRequest(BaseModel):
+    expires_in_minutes: int = 180
+    host_name: str = "Host"
+    bot_name: str = "Replica"
+    room_name: Optional[str] = None
+
+class DailySessionResponse(BaseModel):
+    room_name: str
+    room_url: str
+    host_token: str
+    bot_token: str
+    expires_at: str
+
+class BotStartRequest(BaseModel):
+    room_url: str
+    bot_token: str
+    bot_name: str = "Replica"
+    mode: str = "interactive"
+
+class BotStopRequest(BaseModel):
+    room_url: str
 
 class ToolCall(BaseModel):
     name: str = Field(..., description="Tool/function name")
@@ -74,6 +102,183 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
+
+# --- Daily & Bot Endpoints ---
+
+@app.post("/daily/session", response_model=DailySessionResponse)
+async def create_daily_session(req: DailySessionRequest):
+    if not DAILY_API_KEY or not DAILY_DOMAIN:
+        raise HTTPException(status_code=500, detail="DAILY_API_KEY or DAILY_DOMAIN not set")
+
+    headers = {"Authorization": f"Bearer {DAILY_API_KEY}"}
+    
+    # 1. Create Room
+    # Use provided name or generate a long random one to prevent guessing
+    room_name = req.room_name or f"room-{uuid.uuid4().hex}{uuid.uuid4().hex}"
+    exp_ts = int(time.time()) + (req.expires_in_minutes * 60)
+    
+    room_resp = requests.post(
+        "https://api.daily.co/v1/rooms",
+        headers=headers,
+        json={
+            "name": room_name,
+            "privacy": "public",
+            "properties": {
+                "enable_recording": "cloud",
+                "enable_screenshare": True,
+                "sfu_switchover": 0.5, # Enforce SFU immediately for permissions
+                "exp": exp_ts
+            }
+        }
+    )
+    if room_resp.status_code != 200:
+        # If room exists, we might want to reuse it or fail. For now, fail if explicit name collision.
+        raise HTTPException(status_code=500, detail=f"Failed to create room: {room_resp.text}")
+    
+    room_data = room_resp.json()
+    room_url = room_data.get("url") or f"https://{DAILY_DOMAIN}.daily.co/{room_name}"
+
+    # 2. Generate Tokens (Host & Bot only)
+    def get_token(is_owner=False, user_name=""):
+        payload = {
+            "properties": {
+                "room_name": room_name,
+                "is_owner": is_owner,
+                "user_name": user_name,
+                "enable_recording": "cloud",
+                "exp": exp_ts
+            }
+        }
+        resp = requests.post("https://api.daily.co/v1/meeting-tokens", headers=headers, json=payload)
+        if resp.status_code != 200:
+            raise HTTPException(status_code=500, detail=f"Failed to create token: {resp.text}")
+        return resp.json()["token"]
+
+    return {
+        "room_name": room_name,
+        "room_url": room_url,
+        "host_token": get_token(is_owner=True, user_name=req.host_name),
+        "bot_token": get_token(is_owner=False, user_name=req.bot_name),
+        "expires_at": datetime.fromtimestamp(exp_ts).isoformat()
+    }
+
+@app.post("/daily/rooms/{room_name}/recordings/start")
+async def start_recording(room_name: str):
+    if not DAILY_API_KEY:
+        raise HTTPException(status_code=500, detail="DAILY_API_KEY not set")
+    
+    resp = requests.post(
+        f"https://api.daily.co/v1/rooms/{room_name}/recordings/start",
+        headers={"Authorization": f"Bearer {DAILY_API_KEY}"},
+        json={}
+    )
+    if resp.status_code not in (200, 201):
+         raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return resp.json()
+
+@app.post("/daily/rooms/{room_name}/recordings/stop")
+async def stop_recording(room_name: str):
+    if not DAILY_API_KEY:
+        raise HTTPException(status_code=500, detail="DAILY_API_KEY not set")
+    
+    resp = requests.post(
+        f"https://api.daily.co/v1/rooms/{room_name}/recordings/stop",
+        headers={"Authorization": f"Bearer {DAILY_API_KEY}"},
+        json={}
+    )
+    if resp.status_code not in (200, 201):
+         raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return resp.json()
+
+@app.post("/bot/start")
+async def start_bot(req: BotStartRequest):
+    if req.room_url in bot_processes:
+        # Check if still running
+        proc = bot_processes[req.room_url]
+        if proc.poll() is None:
+            raise HTTPException(status_code=409, detail="Bot already running for this room")
+        else:
+            del bot_processes[req.room_url]
+
+    # Launch worker
+    # Note: In production, use a proper task queue or process manager
+    worker_path = Path(__file__).resolve().parent.parent / "bot" / "worker.py"
+    
+    # Create logs directory
+    log_dir = Path("bot_logs")
+    log_dir.mkdir(exist_ok=True)
+    
+    # Create a log file for this session
+    timestamp = int(time.time())
+    room_id = req.room_url.split("/")[-1]
+    log_file_path = log_dir / f"bot_{room_id}_{timestamp}.log"
+
+    cmd = [
+        sys.executable, str(worker_path),
+        "--room_url", req.room_url,
+        "--token", req.bot_token,
+        "--bot_name", req.bot_name,
+        "--mode", req.mode
+    ]
+    
+    try:
+        # We detach the process so it survives this request, but keep a handle
+        # Redirect stdout/stderr to files or pipe for logging
+        # We open the file in append mode, but since we just created the path it's fine.
+        # Actually, subprocess needs a file descriptor or a file object.
+        # We can't use 'with open' because the file needs to stay open for the subprocess?
+        # No, if we pass the file object to stdout, it stays open for the child process?
+        # Actually, it's safer to let the child process inherit the file handle.
+        # But we need to keep the file object open in the parent?
+        # Popen docs: "If stdout is a file object, it will be used as standard output."
+        
+        log_file = open(log_file_path, "w")
+        env = os.environ.copy()
+        env.setdefault("PYTHONUNBUFFERED", "1")
+        proc = subprocess.Popen(
+            cmd,
+            cwd=os.getcwd(),
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            env=env
+        )
+        # We can close the file in the parent process after Popen?
+        # "The file descriptor is duplicated in the child process."
+        # So we can close it in the parent.
+        # But let's keep it simple.
+        
+        bot_processes[req.room_url] = proc
+        return {"status": "started", "pid": proc.pid, "room_url": req.room_url, "log_file": str(log_file_path)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to start bot: {e}")
+
+@app.post("/bot/stop")
+async def stop_bot(req: BotStopRequest):
+    proc = bot_processes.get(req.room_url)
+    if not proc:
+        return {"status": "not_found", "message": "No bot found for this room"}
+    
+    if proc.poll() is None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+    
+    del bot_processes[req.room_url]
+    return {"status": "stopped"}
+
+@app.get("/bot/status")
+async def get_bot_status(room_url: str):
+    proc = bot_processes.get(room_url)
+    running = proc is not None and proc.poll() is None
+    return {"running": running, "pid": proc.pid if proc else None}
+
+# --- End Daily & Bot Endpoints ---
 
 
 def verify_secret(req: Request) -> None:

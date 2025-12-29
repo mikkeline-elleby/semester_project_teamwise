@@ -1,5 +1,47 @@
 # Tavus Test Harness
 
+## Daily-Owned Rooms with Tavus Replica (Pipecat)
+
+This project now supports creating Daily rooms owned by you (not Tavus) and injecting a Tavus replica as a bot participant using Pipecat.
+
+### Setup
+1.  Install dependencies: `pip install -r requirements.txt`
+2.  Set environment variables in `.env`:
+    *   `DAILY_API_KEY`: Your Daily.co API key.
+    *   `DAILY_DOMAIN`: Your Daily.co domain (e.g., `my-domain`).
+  *   `CARTESIA_API_KEY`: Cartesia API key for TTS (required).
+  *   `CARTESIA_VOICE_ID`: Cartesia voice identifier (required).
+  *   `CARTESIA_MODEL`: Optional Cartesia model override.
+  *   `CARTESIA_SAMPLE_RATE`: Optional output sample rate (defaults to `24000`).
+    *   `TAVUS_API_KEY`: Your Tavus API key.
+    *   `TAVUS_REPLICA_ID`: The ID of the Tavus replica to use.
+
+Cartesia replaces the previous OpenAI TTS dependency; no OpenAI credentials are required.
+
+### Usage
+1.  **Start Backend**: `uvicorn app.main:app --reload`
+2.  **Open Frontend**: Open `web-demo/daily_diarization.html`.
+3.  **Create Public Room**: Click "Create Public Room". This generates a public Daily room and tokens for the Host and Bot.
+4.  **Share Link**: Copy the "Share Link" and send it to participants. They can join without a token.
+5.  **Join as Host**: Click "Join as Host (Owner)". You will have admin privileges (recording, ejection).
+6.  **Start Replica (Task 1)**: Click "Start Replica". The bot joins.
+7.  **Eject Replica (Task 2)**: Click "Eject Replica". The bot is removed from the call, but the room remains active for humans.
+8.  **Recording**: Use the "Record" button to toggle cloud recording.
+
+#### Verifying replica media output
+1. Export `DEBUG_MEDIA=1` before starting the bot to enable Tavus → Daily frame counters in `bot/worker.py` logs.
+2. Start the bot and wait for the "Daily transport joined" log. Within a few seconds you should see `[MEDIA] tavus->daily` heartbeats with non-zero audio/video counts.
+3. In the Daily UI (or the helper page), confirm a participant named "Replica" appears with an active tile.
+4. Unmute the call audio and verify you can hear the welcome message or any prompted speech from the replica.
+5. If the tile is blank or silent, inspect the debug counters: zero video frames implies Tavus is not producing video, zero audio frames indicates Cartesia output stalled, and non-zero counters with a blank tile points to a Daily/JS rendering issue.
+
+### Architecture
+*   **Backend (`app/main.py`)**: Manages public Daily room creation, token generation (Host/Bot), and bot process lifecycle.
+*   **Bot (`bot/worker.py`)**: A Pipecat-based worker that connects to Daily, uses Cartesia for streaming TTS, and feeds the audio into `TavusVideoService` to render the avatar.
+*   **Frontend**: Custom Daily.js UI for managing the session.
+
+---
+
 Minimal harness for creating personas and conversations against the Tavus API using config files plus a small helper script set.
 
 ## 1) Setup
