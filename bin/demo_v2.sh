@@ -4,14 +4,19 @@ set -euo pipefail
 ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT_DIR"
 
-PY=${PY:-".venv/Scripts/python.exe"}
+PY=${PYTHON:-}
 if [[ -z "${PY}" ]]; then
   if [[ -x ".venv/bin/python" ]]; then
     PY=".venv/bin/python"
+  elif [[ -x ".venv/Scripts/python.exe" ]]; then
+    PY=".venv/Scripts/python.exe"
   elif command -v python3 >/dev/null 2>&1; then
     PY="$(command -v python3)"
-  else
+  elif command -v python >/dev/null 2>&1; then
     PY="$(command -v python)"
+  else
+    echo "Python interpreter not found. Please install Python 3 and try again." >&2
+    exit 1
   fi
 fi
 

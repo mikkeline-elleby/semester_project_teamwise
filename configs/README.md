@@ -24,7 +24,7 @@ Example (abbreviated):
   "objectives_name": "facilitator_core",
   "guardrails_name": "facilitator_safety",
   "layers": {
-    "llm": { "llm": "tavus_llama" },
+    "llm": { "llm": "tavus-gpt-oss" },
     "tts": { "tts_engine": "cartesia", "tts_model_name": "sonic" },
     "stt": { "stt_engine": "tavus-advanced" },
     "perception": { "perception_model": "raven-0" }
@@ -74,7 +74,7 @@ after editing any preset under `presets/objectives/` or `presets/guardrails/`.
 
 Instead of verbose inline structures you can reference minimal fragments by name. For example:
 ```json
-{ "layers": { "llm": { "llm": "tavus_llama" } } }
+{ "layers": { "llm": { "llm": "tavus-gpt-oss" } } }
 ```
 The harness expands `llm` into a full model definition using the fragment in `presets/layers/llm/`.
 

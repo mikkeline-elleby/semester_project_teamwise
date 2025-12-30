@@ -4,7 +4,7 @@
     "pipeline_mode": "full",
     "context": "",
     "default_replica_id": "r4317e64d25a",
-    "llm": "tavus_llama",
+    "llm": "tavus-gpt-oss",
     "tts": "cartesia_sonic",
     "stt": "tavus_advanced",
     "perception": "basic",

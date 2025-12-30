@@ -135,3 +135,45 @@ def resolve_guardrails_id_by_name(name: str) -> Optional[str]:
             if rid:
                 return rid
     return None
+
+
+def render_system_prompt(template: str, participants: List[str]) -> str:
+    participants_clean = [str(p).strip() for p in participants if str(p).strip()]
+    if len(participants_clean) != 4:
+        raise ValueError(f"Expected exactly 4 participants, got {len(participants_clean)}")
+
+    def oxford_join(names: List[str]) -> str:
+        if len(names) == 1:
+            return names[0]
+        if len(names) == 2:
+            return f"{names[0]} and {names[1]}"
+        return ", ".join(names[:-1]) + f", and {names[-1]}"
+
+    participant_list = oxford_join(participants_clean)
+    round_robin_order = " → ".join(participants_clean) + " (and repeat)"
+    greeting_line = (
+        f"Hi {participants_clean[0]}, hi {participants_clean[1]}, hi {participants_clean[2]}, hi {participants_clean[3]}. "
+        "When you’re ready, just tell me — and we’ll begin."
+    )
+
+    p1, p2, p3, p4 = participants_clean
+
+    replacements = {
+        "{{P1}}": p1,
+        "{{P2}}": p2,
+        "{{P3}}": p3,
+        "{{P4}}": p4,
+        "{{participants[0]}}": p1,
+        "{{participants[1]}}": p2,
+        "{{participants[2]}}": p3,
+        "{{participants[3]}}": p4,
+        "{{NEXT_PROPOSER}}": p1,
+        "{{PARTICIPANT_LIST}}": participant_list,
+        "{{ROUND_ROBIN_ORDER}}": round_robin_order,
+        "{{GREETING_LINE}}": greeting_line,
+    }
+
+    rendered = template
+    for placeholder, value in replacements.items():
+        rendered = rendered.replace(placeholder, value)
+    return rendered

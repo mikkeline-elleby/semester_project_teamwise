@@ -1,0 +1,22 @@
+{
+  "persona_id": "p0c9277450b5",
+  "replica_id": "",
+  "conversation_name": "Introductory Meeting (CC)",
+  "conversational_context": "",
+  "custom_greeting": "Hi, welcome everyone. Let me know when you're ready to begin.",
+  "audio_only": true,
+  "document_ids": [],
+  "document_tags": [],
+  "document_retrieval_strategy": "balanced",
+  "memory_stores": [],
+  "test_mode": false,
+  "recording_enable": true,
+  "properties": {
+    "max_call_duration": 1800,
+    "participant_left_timeout": 60,
+    "participant_absent_timeout": 600,
+    "language": "english",
+    "enable_closed_captions": true,
+    "apply_greenscreen": false
+  }
+}

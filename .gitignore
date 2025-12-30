@@ -6,9 +6,12 @@ __pycache__/
 *.bak
 logs/
 webhook/
+bot_logs/
 .DS_Store
 # Python venv
 .venv/
+.mypy_cache/
+.pytest_cache/
 
 # Editors/IDE
 .vscode/
@@ -16,3 +19,6 @@ webhook/
 
 # Misc
 *.log
+
+# Generated outputs
+personas/generated_replica_id.txt

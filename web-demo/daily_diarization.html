@@ -3,156 +3,120 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Daily + Tavus Custom UI</title>
+  <title>Daily + Tavus diarization helper</title>
   <style>
-    :root {
-      --bg-dark: #0b1021;
-      --bg-panel: #0e152d;
-      --border: #1c2540;
-      --text: #f2f4ff;
-      --accent: #4fd1c5;
-      --danger: #e53e3e;
-    }
-    body { font-family: system-ui, -apple-system, sans-serif; margin: 0; height: 100vh; background: var(--bg-dark); color: var(--text); display: flex; flex-direction: column; overflow: hidden; }
-    
-    /* Layout */
-    #app-container { display: flex; flex: 1; overflow: hidden; position: relative; }
-    #main-stage { flex: 1; background: #000; display: flex; align-items: center; justify-content: center; position: relative; }
-    #sidebar { width: 260px; background: var(--bg-panel); border-left: 1px solid var(--border); overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 10px; }
-    #controls-bar { height: 60px; background: var(--bg-panel); border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: center; gap: 16px; padding: 0 20px; }
-    
-    /* Header / Config Area */
-    #config-panel { padding: 10px 20px; background: var(--bg-panel); border-bottom: 1px solid var(--border); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-    #config-panel input { background: var(--bg-dark); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 4px; width: 200px; }
-    #config-panel button { padding: 6px 12px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; font-size: 13px; }
-    .btn-primary { background: var(--accent); color: var(--bg-dark); }
-    .btn-danger { background: var(--danger); color: white; }
-    .btn-secondary { background: #4a5568; color: white; }
-    
-    /* Video Tiles */
-    .video-tile { background: #222; border-radius: 8px; overflow: hidden; position: relative; aspect-ratio: 16/9; width: 100%; }
-    .video-tile video { width: 100%; height: 100%; object-fit: cover; }
-    .video-tile .label { position: absolute; bottom: 6px; left: 6px; background: rgba(0,0,0,0.7); padding: 2px 6px; border-radius: 4px; font-size: 11px; pointer-events: none; }
-    
-    /* Stage Video */
-    #stage-video-container { width: 100%; height: 100%; max-width: 1280px; max-height: 720px; position: relative; }
-    #stage-video { width: 100%; height: 100%; object-fit: contain; }
-    #stage-label { position: absolute; bottom: 20px; left: 20px; background: rgba(0,0,0,0.7); padding: 6px 12px; border-radius: 6px; font-size: 14px; }
-    
-    /* Controls */
-    .ctrl-btn { width: 44px; height: 44px; border-radius: 50%; border: none; background: #2d3748; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 20px; transition: background 0.2s; }
-    .ctrl-btn:hover { background: #4a5568; }
-    .ctrl-btn.active { background: var(--accent); color: var(--bg-dark); }
-    .ctrl-btn.danger { background: var(--danger); }
-
-    /* Logs */
-    #log-panel { height: 150px; background: #080c19; border-top: 1px solid var(--border); overflow-y: auto; padding: 10px; font-family: monospace; font-size: 12px; color: #a0aec0; }
-    
-    /* Utilities */
-    .hidden { display: none !important; }
+    body { font-family: system-ui, -apple-system, sans-serif; margin: 16px; line-height: 1.4; background: #0b1021; color: #f2f4ff; }
+    h1 { margin: 0 0 12px; font-size: 22px; }
+    label { display: block; margin: 8px 0 4px; font-weight: 600; }
+    input { width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #29304a; background: #11172f; color: #f2f4ff; }
+    button { margin-top: 12px; padding: 10px 14px; border: none; border-radius: 8px; background: #4fd1c5; color: #0b1021; font-weight: 700; cursor: pointer; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .row { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 8px; }
+    @media (min-width: 900px) { .row { grid-template-columns: 320px 1fr; } }
+    #call { width: 100%; height: 500px; background: #0e152d; border: 1px solid #1c2540; border-radius: 10px; overflow: hidden; transition: height 0.3s; }
+    #call.audio-mode { height: 80px; border-radius: 0 0 10px 10px; border-top: 0; }
+    #audio-placeholder { display: none; height: 420px; background: #0e152d; border: 1px solid #1c2540; border-bottom: 0; border-radius: 10px 10px 0 0; align-items: center; justify-content: center; flex-direction: column; color: #9eb0e0; }
+    #audio-placeholder.visible { display: flex; }
+    #log { background: #0e152d; border: 1px solid #1c2540; border-radius: 10px; padding: 10px; height: 260px; overflow-y: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .note { font-size: 13px; color: #9eb0e0; margin-top: 6px; }
   </style>
   <script src="https://unpkg.com/@daily-co/daily-js"></script>
 </head>
 <body>
-
-  <!-- Top Config Panel -->
-  <div id="config-panel">
-    <input id="conversation-url" placeholder="Conversation URL" />
-    <input id="display-name" placeholder="Your Name" value="Guest" />
-    <button id="join-btn" class="btn-primary">Join</button>
-    <div style="width: 1px; height: 20px; background: #333; margin: 0 8px;"></div>
-    <button id="start-btn" class="btn-secondary" disabled>Start Icebreaker</button>
-    <button id="replica-off-btn" class="btn-danger" disabled>Replica Off</button>
-    <button id="replica-stop-btn" class="btn-danger" disabled>Stop Speaking</button>
-    <div style="width: 1px; height: 20px; background: #333; margin: 0 8px;"></div>
-    <button id="record-btn" class="btn-secondary" disabled>⏺ Record</button>
-    <div style="flex:1"></div>
-    <div style="font-size: 12px; color: #666;">Tavus Custom UI</div>
-  </div>
-
-  <!-- Main Layout -->
-  <div id="app-container">
-    <!-- Center Stage -->
-    <div id="main-stage">
-      <div id="stage-video-container" class="hidden">
-        <video id="stage-video" autoplay playsinline></video>
-        <div id="stage-label">Active Speaker</div>
+  <h1>Daily diarization → Tavus roster helper</h1>
+  <div class="row">
+    <div>
+      <label for="conversation-url">Conversation URL (from tune.py)</label>
+      <input id="conversation-url" placeholder="https://tavus.daily.co/abcdef123456" />
+      <label for="webhook-base">Webhook base (FastAPI)</label>
+      <input id="webhook-base" value="http://localhost:8000" />
+      <label for="display-name">Your display name</label>
+      <input id="display-name" placeholder="Alex" />
+      <label style="display:flex; align-items:center; gap:8px; margin-top:8px; font-weight:400; font-size:14px; cursor:pointer;">
+        <input type="checkbox" id="audio-only-check" style="width:auto; margin:0;">
+        <span>Audio-only view (hide video)</span>
+      </label>
+      <div style="display: flex; gap: 10px;">
+        <button id="join-btn">Join and listen</button>
+        <button id="start-btn" disabled>Start Icebreaker</button>
       </div>
-      <div id="stage-placeholder" style="color: #555;">Waiting for participants...</div>
+      <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px;">
+        <button id="btn-intro" class="phase-btn" disabled style="background:#4a5568; color:#fff; font-size:12px; padding:6px 10px;">Intro</button>
+        <button id="btn-picnic" class="phase-btn" disabled style="background:#4a5568; color:#fff; font-size:12px; padding:6px 10px;">Picnic</button>
+        <button id="btn-morning" class="phase-btn" disabled style="background:#4a5568; color:#fff; font-size:12px; padding:6px 10px;">Morning</button>
+        <button id="btn-fun" class="phase-btn" disabled style="background:#4a5568; color:#fff; font-size:12px; padding:6px 10px;">Fun Skill</button>
+        <button id="btn-shared" class="phase-btn" disabled style="background:#4a5568; color:#fff; font-size:12px; padding:6px 10px;">Shared Pref</button>
+        <button id="btn-transition" class="phase-btn" disabled style="background:#4a5568; color:#fff; font-size:12px; padding:6px 10px;">End</button>
+      </div>
+      <div class="note">Ensure the conversation config has enable_closed_captions=true. Start your FastAPI webhook (uvicorn app.main:app).</div>
+      <div class="note">We post participant info to /roster/register to keep Tavus tools diarization-aware.</div>
+      <div class="note">This version uses an echo queue to prevent the replica from getting cut off by back-to-back echoes.</div>
     </div>
-
-    <!-- Right Sidebar -->
-    <div id="sidebar">
-      <!-- Tiles injected here -->
+    <div style="display:flex; flex-direction:column;">
+      <div id="audio-placeholder">
+        <div style="font-size:48px; margin-bottom:16px;">🎧</div>
+        <div style="font-size:16px; font-weight:600; color:#f2f4ff;">Audio-Only Mode</div>
+        <div style="font-size:13px; margin-top:4px;">Video area hidden</div>
+      </div>
+      <div id="call"></div>
     </div>
   </div>
-
-  <!-- Bottom Controls -->
-  <div id="controls-bar">
-    <button id="btn-mic" class="ctrl-btn" title="Toggle Mic">🎤</button>
-    <button id="btn-cam" class="ctrl-btn" title="Toggle Camera">📷</button>
-    <button id="btn-screen" class="ctrl-btn" title="Share Screen">🖥️</button>
-    <div style="width: 20px;"></div>
-    <button id="btn-leave" class="ctrl-btn danger" title="Leave Call">📞</button>
-  </div>
-
-  <!-- Logs -->
-  <div id="log-panel"></div>
-
-  <!-- Hidden Audio Container for Remote Participants -->
-  <div id="audio-container" style="display:none;"></div>
+  <label style="margin-top:16px;">Event log</label>
+  <div id="log"></div>
 
   <script>
-    // --- Configuration & State ---
-    const facilKeywords = ["assistant", "facilitator", "meeting facilitator", "teamwise"];
-    let callObject = null;
-    let conversationId = null;
-    let participants = {}; // Local roster state
-    let activeSpeakerId = null;
-    let screenShareId = null;
-    
-    // Tavus State
-    let executedPhases = new Set();
-    let replicaDisabled = false;
-    let ignoreToolCalls = false;
-    let echoQueue = [];
-    let echoSending = false;
-    let replicaSpeaking = false;
-    let nextSendNotBefore = 0;
-    let onEchoIdleCallbacks = [];
-    let speakCounts = {};
-    let lastSpokenPeerId = null;
-    let lastSpokenName = null;
-    let recordingState = { active: false, id: null };
-
-    // Round Robin State
-    let roundState = {
-      active: false, stepKey: null, queue: [], currentId: null,
-      completed: new Set(), responses: [], promptFn: null,
-      allowOutOfOrder: true, pendingStart: false
-    };
-
-    // --- UI Elements ---
-    const logEl = document.getElementById("log-panel");
-    const stageContainer = document.getElementById("stage-video-container");
-    const stageVideo = document.getElementById("stage-video");
-    const stageLabel = document.getElementById("stage-label");
-    const stagePlaceholder = document.getElementById("stage-placeholder");
-    const sidebar = document.getElementById("sidebar");
-    const audioContainer = document.getElementById("audio-container");
-    
-    // Buttons
+    const logEl = document.getElementById("log");
+    const convoInput = document.getElementById("conversation-url");
+    const webhookInput = document.getElementById("webhook-base");
+    const nameInput = document.getElementById("display-name");
+    const audioCheck = document.getElementById("audio-only-check");
+    const callEl = document.getElementById("call");
+    const placeholderEl = document.getElementById("audio-placeholder");
     const joinBtn = document.getElementById("join-btn");
     const startBtn = document.getElementById("start-btn");
-    const replicaOffBtn = document.getElementById("replica-off-btn");
-    const replicaStopBtn = document.getElementById("replica-stop-btn");
-    const recordBtn = document.getElementById("record-btn");
-    const btnMic = document.getElementById("btn-mic");
-    const btnCam = document.getElementById("btn-cam");
-    const btnScreen = document.getElementById("btn-screen");
-    const btnLeave = document.getElementById("btn-leave");
+    
+    const btnIntro = document.getElementById("btn-intro");
+    const btnPicnic = document.getElementById("btn-picnic");
+    const btnMorning = document.getElementById("btn-morning");
+    const btnFun = document.getElementById("btn-fun");
+    const btnShared = document.getElementById("btn-shared");
+    const btnTransition = document.getElementById("btn-transition");
+    const phaseBtns = [btnIntro, btnPicnic, btnMorning, btnFun, btnShared, btnTransition];
 
-    // --- Logging ---
+    // Toggle Audio-Only Mode
+    audioCheck.addEventListener("change", (e) => {
+      if (e.target.checked) {
+        callEl.classList.add("audio-mode");
+        placeholderEl.classList.add("visible");
+      } else {
+        callEl.classList.remove("audio-mode");
+        placeholderEl.classList.remove("visible");
+      }
+    });
+
+    let frame = null;
+    let conversationId = null;
+    let participants = {};
+    let lastActivePeerId = null;
+    let lastSpokenPeerId = null;
+    let lastSpokenName = null;
+    let speakCounts = {};
+    let executedPhases = new Set();
+
+    // --- Round-robin icebreaker state ---
+    let roundState = {
+      active: false,
+      stepKey: null,
+      queue: [],
+      currentId: null,
+      completed: new Set(),
+      responses: [],
+      promptFn: null,
+      allowOutOfOrder: true,
+      pendingStart: false, // wait until replica is quiet + echo queue is idle
+    };
+
+    // ---------- Logging ----------
     function logLine(msg) {
       const line = document.createElement("div");
       line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
@@ -160,218 +124,22 @@
       logEl.scrollTop = logEl.scrollHeight;
     }
 
-    // --- Helpers ---
     function parseConversationId(url) {
       try {
         const u = new URL(url);
         const parts = u.pathname.split("/").filter(Boolean);
         return parts[0] || null;
-      } catch (e) { return null; }
+      } catch (e) {
+        return null;
+      }
     }
 
+    // ---------- Helpers: participants & filtering ----------
+    const facilKeywords = ["assistant", "facilitator", "meeting facilitator", "teamwise"];
     function isFacilName(nm) {
-      return facilKeywords.some((k) => (nm || "").toLowerCase().includes(k));
+      return facilKeywords.some((k) => nm?.toLowerCase().includes(k));
     }
 
-    function isReplica(p) {
-      return !p.local && isFacilName(p.user_name);
-    }
-
-    function getTrack(p, type) {
-      const t = p?.tracks?.[type];
-      return (t && t.state === "playable") ? t.persistentTrack : null;
-    }
-
-    // --- Rendering Logic ---
-    function updateUI() {
-      if (!callObject) return;
-      
-      const allParticipants = Object.values(callObject.participants());
-      const local = allParticipants.find(p => p.local);
-      
-      // 1. Manage Audio (Standalone elements for everyone remote)
-      // This ensures we hear everyone, including the invisible replica
-      allParticipants.forEach(p => {
-        if (p.local) return; // Local audio handled by browser/system
-        
-        // If replica is disabled, strictly enforce silence by ignoring its track
-        if (replicaDisabled && isReplica(p)) {
-            const existing = document.getElementById(`audio-${p.session_id}`);
-            if (existing) existing.remove();
-            return;
-        }
-
-        let audioEl = document.getElementById(`audio-${p.session_id}`);
-        const audioTrack = getTrack(p, "audio");
-        
-        if (audioTrack) {
-          if (!audioEl) {
-            audioEl = document.createElement("audio");
-            audioEl.id = `audio-${p.session_id}`;
-            audioEl.autoplay = true;
-            audioContainer.appendChild(audioEl);
-          }
-          const stream = new MediaStream([audioTrack]);
-          if (audioEl.srcObject?.id !== stream.id) {
-            audioEl.srcObject = stream;
-          }
-        } else {
-          if (audioEl) audioEl.remove();
-        }
-      });
-
-      // 2. Determine Stage Participant
-      // Priority: Screen Share -> Active Speaker -> Local User
-      let stageP = null;
-      
-      // Check for screen share
-      const screenSharer = allParticipants.find(p => getTrack(p, "screenVideo"));
-      if (screenSharer) {
-        stageP = { p: screenSharer, track: getTrack(screenSharer, "screenVideo"), isScreen: true };
-      } else {
-        // Check active speaker (must be human)
-        const speaker = allParticipants.find(p => p.session_id === activeSpeakerId);
-        if (speaker && !isReplica(speaker)) {
-          stageP = { p: speaker, track: getTrack(speaker, "video"), isScreen: false };
-        } else {
-          // Fallback to local or first human
-          const fallback = local || allParticipants.find(p => !isReplica(p));
-          if (fallback) {
-            stageP = { p: fallback, track: getTrack(fallback, "video"), isScreen: false };
-          }
-        }
-      }
-
-      // Render Stage
-      if (stageP && stageP.track) {
-        stageContainer.classList.remove("hidden");
-        stagePlaceholder.classList.add("hidden");
-        
-        const stream = new MediaStream([stageP.track]);
-        if (stageVideo.srcObject?.id !== stream.id) {
-          stageVideo.srcObject = stream;
-        }
-        stageLabel.textContent = stageP.p.user_name + (stageP.isScreen ? " (Screen)" : "");
-      } else {
-        stageContainer.classList.add("hidden");
-        stagePlaceholder.classList.remove("hidden");
-        stagePlaceholder.textContent = "No active video";
-      }
-
-      // 3. Render Sidebar (All Humans)
-      // We rebuild the list or update existing to keep order? 
-      // Simple approach: Sync DOM with list
-      const humans = allParticipants.filter(p => !isReplica(p));
-      
-      // Remove stale
-      Array.from(sidebar.children).forEach(el => {
-        const id = el.dataset.id;
-        if (!humans.find(p => p.session_id === id)) el.remove();
-      });
-
-      // Add/Update
-      humans.forEach(p => {
-        let tile = document.getElementById(`tile-${p.session_id}`);
-        if (!tile) {
-          tile = document.createElement("div");
-          tile.className = "video-tile";
-          tile.id = `tile-${p.session_id}`;
-          tile.dataset.id = p.session_id;
-          tile.innerHTML = `<video autoplay playsinline muted></video><div class="label"></div>`;
-          sidebar.appendChild(tile);
-        }
-        
-        const vid = tile.querySelector("video");
-        const label = tile.querySelector(".label");
-        
-        label.textContent = p.user_name + (p.local ? " (You)" : "");
-        
-        const track = getTrack(p, "video");
-        if (track) {
-          const stream = new MediaStream([track]);
-          if (vid.srcObject?.id !== stream.id) vid.srcObject = stream;
-          vid.style.opacity = "1";
-        } else {
-          vid.style.opacity = "0"; // Hide video element if no track, keep tile
-        }
-        
-        // Highlight active speaker in sidebar
-        if (p.session_id === activeSpeakerId) {
-          tile.style.border = "2px solid var(--accent)";
-        } else {
-          tile.style.border = "none";
-        }
-      });
-    }
-
-    // --- Daily Events ---
-    function wireEvents(call) {
-      const events = ["participant-joined", "participant-updated", "participant-left", "track-started", "track-stopped"];
-      events.forEach(e => call.on(e, updateUI));
-
-      // Recording Events
-      call.on("recording-started", (e) => {
-        recordingState.active = true;
-        recordingState.id = e.recordingId;
-        updateRecordUI();
-        logLine("Recording STARTED");
-      });
-      call.on("recording-stopped", () => {
-        recordingState.active = false;
-        recordingState.id = null;
-        updateRecordUI();
-        logLine("Recording STOPPED");
-      });
-      call.on("recording-error", (e) => logLine(`Recording Error: ${e.errorMsg}`));
-
-      call.on("active-speaker-change", (ev) => {
-        activeSpeakerId = ev.activeSpeaker?.peerId;
-        updateUI();
-        
-        // Tavus Logic Hook
-        const p = ev.activeSpeaker?.peerId ? call.participants()[ev.activeSpeaker.peerId] : null;
-        if (p) registerRoster(p, true);
-      });
-
-      // Transcription & Tavus Logic
-      call.on("transcription-message", handleTranscription);
-      call.on("app-message", handleAppMessage);
-      
-      // Controls State
-      call.on("participant-updated", (ev) => {
-        if (ev.participant.local) updateControlsState(ev.participant);
-      });
-    }
-
-    function updateControlsState(p) {
-      const audio = p.audio;
-      const video = p.video;
-      const screen = p.screen;
-      
-      btnMic.classList.toggle("active", audio);
-      btnMic.textContent = audio ? "🎤" : "mic_off";
-      
-      btnCam.classList.toggle("active", video);
-      btnCam.textContent = video ? "📷" : "videocam_off";
-      
-      btnScreen.classList.toggle("active", screen);
-    }
-
-    function updateRecordUI() {
-      if (recordingState.active) {
-        recordBtn.textContent = "⏹ Stop Rec";
-        recordBtn.classList.remove("btn-secondary");
-        recordBtn.classList.add("btn-danger");
-      } else {
-        recordBtn.textContent = "⏺ Record";
-        recordBtn.classList.remove("btn-danger");
-        recordBtn.classList.add("btn-secondary");
-      }
-    }
-
-    // --- Tavus Logic (Restored) ---
-
-    // Helpers
     function rememberParticipant(p) {
       if (!p) return null;
       const id = p.session_id || p.peerId || p.id || null;
@@ -390,6 +158,33 @@
       if (!key) return;
       const existing = speakCounts[key] || { id, name, count: 0 };
       speakCounts[key] = { id: id || existing.id, name: name || existing.name, count: (existing.count || 0) + 1 };
+    }
+
+    async function registerRoster(p, active = false) {
+      const entry = rememberParticipant(p);
+      if (!entry || !conversationId) return;
+      if (active) {
+        lastSpokenPeerId = entry.id;
+        lastSpokenName = entry.name;
+        bumpSpeakCount(entry.id, entry.name);
+      }
+      const body = {
+        conversation_id: conversationId,
+        display_name: entry.name,
+        participant_id: entry.id,
+        active,
+      };
+      try {
+        const base = webhookInput.value.replace(/\/$/, "");
+        await fetch(`${base}/roster/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        logLine(`Roster updated: ${entry.name} (${entry.id})${active ? " [active]" : ""}`);
+      } catch (err) {
+        logLine(`Failed to POST /roster/register: ${err}`);
+      }
     }
 
     function participantFromId(id) {
@@ -433,34 +228,75 @@
       return namesText;
     }
 
-    // Echo Queue Helpers
+    // =========================================================
+    // Echo queue (prevents the replica getting cut off)
+    // =========================================================
+    let echoQueue = []; // { text, inferenceId }
+    let echoSending = false;
+    let replicaSpeaking = false;   // best-effort, based on app-message events
+    let nextSendNotBefore = 0;     // simple throttle
+    let onEchoIdleCallbacks = [];  // run when queue empty AND replica not speaking
+
     function estimateSpeechMs(text) {
+      // Roughly 150 wpm => ~400ms per word. Add base + punctuation padding.
       const words = (text || "").trim().split(/\s+/).filter(Boolean).length;
       const punctuation = (text.match(/[.,!?;:]/g) || []).length;
       const base = 700;
       const perWord = 380;
       const perPunct = 120;
       const total = base + words * perWord + punctuation * perPunct;
+      // Clamp a bit so tiny messages still get a gap, huge ones don't block forever.
       return Math.max(900, Math.min(total, 22000));
+    }
+
+    function sendEchoNow(text, inferenceId) {
+      if (!frame || !conversationId) return;
+      const interaction = {
+        message_type: "conversation",
+        event_type: "conversation.echo",
+        conversation_id: conversationId,
+        properties: { modality: "text", text, done: true },
+      };
+      if (inferenceId) interaction.properties.inference_id = inferenceId;
+      frame.sendAppMessage(interaction, "*");
+    }
+
+    function enqueueEcho(text, inferenceId) {
+      if (!text || !String(text).trim()) return;
+      echoQueue.push({ text: String(text), inferenceId });
+      logLine(`Queued echo (${echoQueue.length}) → "${String(text).slice(0, 80)}${String(text).length > 80 ? "…" : ""}"`);
+      pumpEchoQueue();
     }
 
     function afterEchoIdle(fn) {
       if (typeof fn !== "function") return;
+
       let executed = false;
       const safeFn = () => {
         if (executed) return;
         executed = true;
         fn();
       };
+
       onEchoIdleCallbacks.push(safeFn);
+
+      // Failsafe: force execution if stuck for too long (e.g. missed event)
       setTimeout(() => {
         if (!executed) {
-          if (replicaSpeaking) replicaSpeaking = false;
+          logLine("Failsafe: forcing afterEchoIdle callback (timeout).");
+          
+          // If we timed out, the replica state might be stuck. Reset it so the next message can send.
+          if (replicaSpeaking) {
+            logLine("Failsafe: resetting stuck replicaSpeaking flag to false.");
+            replicaSpeaking = false;
+          }
+
           const idx = onEchoIdleCallbacks.indexOf(safeFn);
           if (idx !== -1) onEchoIdleCallbacks.splice(idx, 1);
           safeFn();
         }
       }, 6000);
+
       pumpEchoQueue();
     }
 
@@ -468,14 +304,60 @@
       if (echoQueue.length === 0 && !echoSending && !replicaSpeaking) {
         const callbacks = onEchoIdleCallbacks.slice();
         onEchoIdleCallbacks = [];
-        callbacks.forEach((cb) => { try { cb(); } catch (e) { logLine(`Error: ${e}`); } });
+        callbacks.forEach((cb) => {
+          try { cb(); } catch (e) { logLine(`afterEchoIdle callback error: ${e}`); }
+        });
       }
     }
 
-    // Round Robin Engine
+    function pumpEchoQueue() {
+      if (echoSending) return;
+
+      // If replica is talking (and we know it), wait.
+      if (replicaSpeaking) {
+        runEchoIdleCallbacksIfReady();
+        return;
+      }
+
+      if (echoQueue.length === 0) {
+        runEchoIdleCallbacksIfReady();
+        return;
+      }
+
+      const now = Date.now();
+      if (now < nextSendNotBefore) {
+        setTimeout(pumpEchoQueue, Math.max(60, nextSendNotBefore - now));
+        return;
+      }
+
+      const item = echoQueue.shift();
+      echoSending = true;
+
+      try {
+        sendEchoNow(item.text, item.inferenceId);
+        logLine(`Sent echo → "${item.text.slice(0, 120)}${item.text.length > 120 ? "…" : ""}"`);
+      } catch (e) {
+        logLine(`Failed to send echo: ${e}`);
+      }
+
+      const holdMs = estimateSpeechMs(item.text);
+      nextSendNotBefore = Date.now() + holdMs;
+
+      // Release sending lock and try the next message after the hold.
+      setTimeout(() => {
+        echoSending = false;
+        pumpEchoQueue();
+        runEchoIdleCallbacksIfReady();
+      }, holdMs);
+    }
+
+    // =========================================================
+    // Round-robin engine
+    // =========================================================
     function buildQueue(strategy = "joined") {
       const people = getHumanParticipants();
       if (!people.length) return [];
+
       if (strategy === "random") {
         const ids = people.map(p => p.id);
         for (let i = ids.length - 1; i > 0; i--) {
@@ -484,18 +366,22 @@
         }
         return ids;
       }
+
       if (strategy === "least_active_first") {
         people.forEach((p) => {
           const key = p.id || `name:${p.name.toLowerCase()}`;
           if (!speakCounts[key]) speakCounts[key] = { id: p.id, name: p.name, count: 0 };
         });
+
         const scored = people.map((p) => {
           const key = p.id || `name:${p.name.toLowerCase()}`;
           return { id: p.id, count: speakCounts[key]?.count || 0 };
         });
+
         scored.sort((a, b) => a.count - b.count);
         return scored.map(s => s.id);
       }
+
       return people.map(p => p.id);
     }
 
@@ -508,25 +394,35 @@
       roundState.allowOutOfOrder = opts.allowOutOfOrder ?? true;
       roundState.queue = buildQueue(opts.queueStrategy || "least_active_first");
       
+      // Determine first prompt
       let firstPrompt = "";
       let firstId = null;
+      
       if (roundState.queue.length > 0) {
         firstId = roundState.queue[0];
         const p = participants[firstId];
-        if (p) firstPrompt = promptFn(p.name || "there");
+        if (p) {
+             firstPrompt = promptFn(p.name || "there");
+        }
       }
 
+      // Combine intro text and first prompt
       const intro = opts.introText || "";
       const fullScript = [intro, firstPrompt].filter(Boolean).join(" ");
-      if (fullScript) enqueueEcho(fullScript, opts.inferenceId);
+      
+      if (fullScript) {
+          enqueueEcho(fullScript, opts.inferenceId);
+      }
 
       roundState.currentId = firstId;
-      roundState.pendingStart = false;
-      logLine(`Round started: ${stepKey}`);
+      roundState.pendingStart = false; // No need to wait, we combined them
+
+      logLine(`Round started: ${stepKey} with ${roundState.queue.length} participants. Prompted first: ${firstId}`);
     }
 
     function triggerNextPhase(currentPhase) {
       let nextTool = null;
+
       if (currentPhase === "intro") nextTool = "start_picnic_game";
       else if (currentPhase === "picnic_game") nextTool = "start_morning_enjoyment_round";
       else if (currentPhase === "morning_enjoyment") nextTool = "start_fun_skill_round";
@@ -534,8 +430,11 @@
       else if (currentPhase === "shared_preference_tea_coffee") nextTool = "transition_to_next_session";
 
       if (nextTool) {
-        logLine(`Auto-advancing to ${nextTool}...`);
-        afterEchoIdle(() => handleToolCall({ properties: { name: nextTool } }));
+        logLine(`Auto-advancing to ${nextTool} after echo queue is idle...`);
+        afterEchoIdle(() => {
+          logLine(`Executing auto-advance to ${nextTool}`);
+          handleToolCall({ properties: { name: nextTool } });
+        });
       }
     }
 
@@ -547,8 +446,13 @@
       if (!nextId) {
         roundState.active = false;
         roundState.currentId = null;
+
         const phaseName = roundState.stepKey.replace(/_/g, " ");
         enqueueEcho(`Thanks everyone — the ${phaseName} round is complete.`);
+
+        logLine(`Round finished: ${roundState.stepKey}`);
+
+        // only trigger the next phase when the completion echo has finished
         triggerNextPhase(roundState.stepKey);
         return;
       }
@@ -557,12 +461,19 @@
       const p = participants[nextId];
       const promptText = roundState.promptFn?.(p?.name || "there") || "";
       if (promptText) enqueueEcho(promptText);
+      logLine(`Prompted next: ${p?.name || nextId}`);
     }
 
     function markComplete(participant_id, display_name, text) {
       logLine(`Marked complete: ${display_name}`);
       roundState.completed.add(participant_id);
-      roundState.responses.push({ stepKey: roundState.stepKey, participant_id, display_name, text, ts: Date.now() });
+      roundState.responses.push({
+        stepKey: roundState.stepKey,
+        participant_id,
+        display_name,
+        text,
+        ts: Date.now(),
+      });
     }
 
     function resetRound() {
@@ -577,316 +488,369 @@
       roundState.pendingStart = false;
     }
 
-    // Event Handlers
-    function handleTranscription(ev) {
-      const msg = ev.message || ev;
-      const text = msg.text || "";
-      const pid = typeof msg.participant === "string" ? msg.participant : msg.participant?.session_id;
-      
-      if (msg.is_final && text) {
-        const p = callObject.participants()[pid];
-        const name = p?.user_name || "Unknown";
-        logLine(`[CC] ${name}: ${text}`);
-        
-        if (p) {
-            registerRoster(p, true);
-            lastSpokenPeerId = pid;
-            lastSpokenName = name;
-        }
+    // =========================================================
+    // Tool calls
+    // =========================================================
+    function handleToolCall(event) {
+      const { properties = {}, inference_id: inferenceId, conversation_id: convId } = event || {};
+      if (convId && !conversationId) conversationId = convId;
+      const toolName = properties.name;
 
-        // "What's my name?" helper
-        const textLower = (text || "").toLowerCase();
-        if ((textLower.includes("what") && textLower.includes("my name")) ||
-            (textLower.includes("who") && textLower.includes("am i")) ||
-            (textLower.includes("my name"))) {
-          if (lastSpokenName) enqueueEcho(`You are ${lastSpokenName}`);
-        }
+      if (toolName === "get_current_speaker") {
+        const { name, confident } = currentSpeaker();
+        if (name && confident) {
+          logLine(`Acknowledging current speaker: ${name}`);
+          enqueueEcho(`Acknowledged: ${name} has spoken.`, inferenceId);
 
-        // Start Trigger
-        if (executedPhases.size === 0) {
-             const words = textLower.split(/\s+/);
-             if (words.includes("start") || words.includes("begin") || textLower.includes("let's start")) {
-                 handleToolCall({ properties: { name: "initiate_introduction" } });
-             }
-        }
-
-        // Round Robin Logic
-        if (roundState.active && pid && !isFacilName(name)) {
-            const spokenText = (text || "").trim();
-            if (spokenText.length > 1) {
-              const isExpected = pid === roundState.currentId;
-              if (isExpected || roundState.allowOutOfOrder) {
-                if (!roundState.completed.has(pid)) {
-                  markComplete(pid, name, spokenText);
-                  enqueueEcho(`Thanks, ${name}.`);
-                  promptNext();
-                }
+          // Optional fallback advancement if tool calls come reliably:
+          if (roundState.active && lastSpokenPeerId) {
+            const p = participants[lastSpokenPeerId];
+            if (p && p.name === name) {
+              const isExpected = lastSpokenPeerId === roundState.currentId;
+              if ((isExpected || roundState.allowOutOfOrder) && !roundState.completed.has(lastSpokenPeerId)) {
+                logLine(`Advancing round via get_current_speaker for ${name}`);
+                markComplete(lastSpokenPeerId, name, "(implied by tool call)");
+                promptNext(); // queues next prompt (won't cut off)
               }
             }
+          }
         }
-      }
-    }
-
-    function handleAppMessage(ev) {
-      const data = ev?.data || {};
-      
-      if (data.event_type === "conversation.interrupt") {
-          applyReplicaStopLocally();
-          return;
-      }
-
-      if (data.event_type === "conversation.tool_call") handleToolCall(data);
-      if (data.event_type?.includes("started_speaking")) {
-          replicaSpeaking = true;
-          logLine("Replica speaking...");
-      }
-      if (data.event_type?.includes("stopped_speaking")) {
-          replicaSpeaking = false;
-          pumpEchoQueue();
-          runEchoIdleCallbacksIfReady();
-      }
-    }
-
-    function handleToolCall(event) {
-      if (ignoreToolCalls) return;
-      const { properties = {}, inference_id: inferenceId } = event || {};
-      const name = properties.name;
-      logLine(`Tool Call: ${name}`);
-      
-      if (name === "get_current_speaker") {
-        const { name, confident } = currentSpeaker();
-        if (name && confident) enqueueEcho(`Acknowledged: ${name} has spoken.`, inferenceId);
         return;
       }
-      if (name === "get_least_active_participant") {
+
+      if (toolName === "get_least_active_participant") {
         const least = leastActiveParticipant();
-        if (least?.name) enqueueEcho(`Call on ${least.name} next.`, inferenceId);
+        if (least?.name) {
+          logLine(`Identifying least active participant: ${least.name}`);
+          enqueueEcho(`Call on ${least.name} next.`, inferenceId);
+        }
         return;
       }
-      if (name === "initiate_introduction") {
-        if (executedPhases.has("intro")) return;
+
+      if (toolName === "initiate_introduction") {
+        if (executedPhases.has("intro")) {
+          logLine("Ignoring duplicate initiate_introduction");
+          return;
+        }
         executedPhases.add("intro");
+        logLine("Tool call received: initiate_introduction. Echoing intro script.");
+
         const namesText = namesTextFromParticipants();
-        const script = `Hi ${namesText}, welcome. I’m TeamWise. I’m not human — but I’m very good at helping humans work well together. We’ll start with a few short, light exercises.`;
+        const script =
+          `Hi ${namesText}, welcome. I’m TeamWise. I’m not human — but I’m very good at helping humans work well together. ` +
+          `We’ll start with a few short, light exercises. Nothing to prepare, nothing to get right — just a way to warm up, ` +
+          `hear each other’s voices, and get comfortable as a group. I’ll guide us through everything.`;
+
         enqueueEcho(script, inferenceId);
+
+        // Next phase only after the intro has finished playing
         triggerNextPhase("intro");
         return;
       }
-      if (name === "start_picnic_game") {
-        if (executedPhases.has("picnic")) return;
+
+      if (toolName === "start_picnic_game") {
+        if (executedPhases.has("picnic")) {
+          logLine("Ignoring duplicate start_picnic_game");
+          return;
+        }
         executedPhases.add("picnic");
-        const script = `Let’s start with names in a playful way. Please say your name and something you’d bring to a picnic that starts with the same letter.`;
-        beginRound("picnic_game", (n) => `${n}, you’re up.`, { queueStrategy: "joined", allowOutOfOrder: false, introText: script, inferenceId });
+        logLine("Tool call received: start_picnic_game. Echoing picnic game script + starting round-robin.");
+
+        const script =
+          `Let’s start with names in a playful way. Please say your name and something you’d bring to a picnic that starts ` +
+          `with the same letter — and briefly why. Before adding your own, repeat the names and picnic items of everyone who spoke ` +
+          `before you. I’ll start. I'm TeamWise, and I would bring Teamwork, because it helps us succeed.`;
+
+        // For the chain game, strict order is better:
+        beginRound(
+          "picnic_game",
+          (name) => `${name}, you’re up — say your name + picnic item (same first letter), and repeat the chain first.`,
+          { queueStrategy: "joined", allowOutOfOrder: false, introText: script, inferenceId }
+        );
         return;
       }
-      if (name === "start_morning_enjoyment_round") {
-        if (executedPhases.has("morning")) return;
+
+      if (toolName === "start_morning_enjoyment_round") {
+        if (executedPhases.has("morning")) {
+          logLine("Ignoring duplicate start_morning_enjoyment_round");
+          return;
+        }
         executedPhases.add("morning");
-        beginRound("morning_enjoyment", (n) => `${n}, what’s one thing you enjoy in the morning?`, { introText: "Great. Let’s do a quick round. What’s one thing you enjoy in the morning?", inferenceId });
+        logLine("Tool call received: start_morning_enjoyment_round. Echoing script + starting round-robin.");
+        const script = `Great. Let’s do a quick round. What’s one thing you enjoy in the morning?`;
+
+        beginRound(
+          "morning_enjoyment",
+          (name) => `${name}, what’s one thing you enjoy in the morning?`,
+          { queueStrategy: "least_active_first", allowOutOfOrder: true, introText: script, inferenceId }
+        );
         return;
       }
-      if (name === "start_fun_skill_round") {
-        if (executedPhases.has("fun_skill")) return;
+
+      if (toolName === "start_fun_skill_round") {
+        if (executedPhases.has("fun_skill")) {
+          logLine("Ignoring duplicate start_fun_skill_round");
+          return;
+        }
         executedPhases.add("fun_skill");
-        beginRound("fun_skill", (n) => `${n}, what’s a fun skill you have?`, { introText: "One more individual round. What’s a fun skill you have?", inferenceId });
+        logLine("Tool call received: start_fun_skill_round. Echoing script + starting round-robin.");
+        const script =
+          `One more individual round. What’s a fun skill you have? This can be something very small or ordinary — nothing impressive required.`;
+
+        beginRound(
+          "fun_skill",
+          (name) => `${name}, what’s a fun skill you have?`,
+          { queueStrategy: "least_active_first", allowOutOfOrder: true, introText: script, inferenceId }
+        );
         return;
       }
-      if (name === "start_shared_preference_task") {
-        if (executedPhases.has("shared_pref")) return;
+
+      if (toolName === "start_shared_preference_task") {
+        if (executedPhases.has("shared_pref")) {
+          logLine("Ignoring duplicate start_shared_preference_task");
+          return;
+        }
         executedPhases.add("shared_pref");
-        beginRound("shared_preference_tea_coffee", (n) => `${n}, tea or coffee?`, { introText: "To finish, let’s do something together. Tea or coffee?", inferenceId });
+        logLine("Tool call received: start_shared_preference_task. Echoing script + starting round-robin.");
+        const script =
+          `To finish, let’s do something together. I’ll suggest a few options, and we’ll see if we can find one thing we all like. ` +
+          `You can just say yes or no — no explanations needed. How about... tea or coffee?`;
+
+        beginRound(
+          "shared_preference_tea_coffee",
+          (name) => `${name}, tea or coffee? (Just say one.)`,
+          { queueStrategy: "least_active_first", allowOutOfOrder: true, introText: script, inferenceId }
+        );
         return;
       }
-      if (name === "transition_to_next_session") {
-        if (executedPhases.has("transition")) return;
+
+      if (toolName === "transition_to_next_session") {
+        if (executedPhases.has("transition")) {
+          logLine("Ignoring duplicate transition_to_next_session");
+          return;
+        }
         executedPhases.add("transition");
-        enqueueEcho("Perfect. We’ve learned each other’s names. Let’s take this relaxed mindset into the next session.", inferenceId);
+        logLine("Tool call received: transition_to_next_session. Echoing transition script.");
+
+        enqueueEcho(
+          `Perfect. We’ve learned each other’s names, shared a few small things, and found some common ground. ` +
+          `Let’s take this relaxed, open mindset into the next session. I will leave you here, disconnect from this call and join the new call for the brainstorming session. You should receive shortly the link for it. It was nice talking to you, have a nice day!`,
+          inferenceId
+        );
+
         resetRound();
         return;
       }
+
+            if (toolName === "get_roster") return;
+      logLine(`Unhandled tool_call ${toolName || "<unknown>"}`);
     }
 
-    function enqueueEcho(text, inferenceId) {
-      if (replicaDisabled) return;
-      if (!text || !String(text).trim()) return;
-      echoQueue.push({ text: String(text), inferenceId });
-      pumpEchoQueue();
-    }
+    // =========================================================
+    // Daily wiring
+    // =========================================================
+    function wireEvents(call) {
+      call.on("participant-joined", (ev) => registerRoster(ev.participant, false));
+      call.on("participant-updated", (ev) => registerRoster(ev.participant, false));
 
-    function pumpEchoQueue() {
-      if (replicaDisabled || echoSending || replicaSpeaking || echoQueue.length === 0) {
-        runEchoIdleCallbacksIfReady();
-        return;
-      }
-      const now = Date.now();
-      if (now < nextSendNotBefore) {
-        setTimeout(pumpEchoQueue, Math.max(60, nextSendNotBefore - now));
-        return;
-      }
-      const item = echoQueue.shift();
-      echoSending = true;
-      
-      if (callObject) {
-        callObject.sendAppMessage({
-          message_type: "conversation",
-          event_type: "conversation.echo",
-          conversation_id: conversationId,
-          properties: { text: item.text, modality: "text", done: true, inference_id: item.inferenceId }
-        }, "*");
-        logLine(`Echo sent: ${item.text}`);
-      }
-      
-      const holdMs = estimateSpeechMs(item.text);
-      nextSendNotBefore = Date.now() + holdMs;
-      setTimeout(() => { echoSending = false; pumpEchoQueue(); runEchoIdleCallbacksIfReady(); }, holdMs);
-    }
+      call.on("active-speaker-change", (ev) => {
+        lastActivePeerId = ev.activeSpeaker?.peerId || null;
+        const p = participantFromId(lastActivePeerId) || ev.activeSpeaker;
+        if (p) registerRoster(p, true);
+      });
 
-    async function registerRoster(p, active = false) {
-      const entry = rememberParticipant(p);
-      if (!entry || !conversationId) return;
-      if (active) {
-        lastSpokenPeerId = entry.id;
-        lastSpokenName = entry.name;
-        bumpSpeakCount(entry.id, entry.name);
-      }
-      const body = { conversation_id: conversationId, display_name: entry.name, participant_id: entry.id, active };
-      try {
-        const base = "http://localhost:8000"; // Hardcoded for now as input might be far
-        await fetch(`${base}/roster/register`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-      } catch (err) { }
-    }
+      call.on("transcription-started", () => logLine("Captions ON"));
+      call.on("transcription-stopped", () => logLine("Captions OFF"));
 
-    // --- Button Actions ---
-    joinBtn.onclick = async () => {
-      const url = document.getElementById("conversation-url").value;
-      const name = document.getElementById("display-name").value;
-      conversationId = parseConversationId(url);
+      call.on("transcription-message", (ev) => {
+        const msg = ev.message || ev;
+        const text = msg.text || "";
+        const speaker = msg.participant || participantFromId(lastActivePeerId);
+        const speakerId =
+          speaker?.session_id ||
+          speaker?.peerId ||
+          speaker?.id ||
+          (typeof msg.participant === "string" ? msg.participant : null) ||
+          null;
 
-      if (!url || !conversationId) return alert("Invalid URL or ID");
-      
-      joinBtn.disabled = true;
-      
-      callObject = window.DailyIframe.createCallObject();
-      wireEvents(callObject);
-      
-      try {
-        await callObject.join({ url, userName: name });
-        logLine("Joined!");
-        startBtn.disabled = false;
-        replicaOffBtn.disabled = false;
-        replicaStopBtn.disabled = false;
-        recordBtn.disabled = false;
-        updateUI();
-      } catch (e) {
-        logLine(`Error: ${e}`);
-        joinBtn.disabled = false;
-      }
-    };
+        if (text) {
+          const label =
+            speaker?.user_name ||
+            speaker?.name ||
+            speaker?.user_id ||
+            participantFromId(lastActivePeerId)?.name ||
+            lastSpokenName ||
+            "Unknown";
+          logLine(`[CC] ${label}: ${text}${msg.is_final ? "" : " (interim)"}`);
+        }
 
-    startBtn.onclick = () => handleToolCall({ properties: { name: "initiate_introduction" } });
+        if (!speaker) return;
 
-    replicaOffBtn.onclick = () => {
-      replicaDisabled = true;
-      ignoreToolCalls = true;
-      echoQueue = [];
-      logLine("Replica Disabled.");
-      
-      // Mute replica subscription
-      const all = callObject.participants();
-      Object.values(all).forEach(p => {
-        if (isReplica(p)) {
-           callObject.updateParticipant(p.session_id, { setAudio: false, setVideo: false });
-           logLine(`Muted replica: ${p.user_name}`);
+        // Track last spoken on both interim and final
+        lastSpokenPeerId = speakerId || lastSpokenPeerId;
+        lastSpokenName = speaker?.user_name || speaker?.name || speaker?.user_id || lastSpokenName;
+
+        if (msg.is_final) {
+          registerRoster({ ...(speaker || {}), id: speakerId }, true);
+          bumpSpeakCount(speakerId, lastSpokenName);
+
+          // "What's my name?" helper
+          const textLower = (text || "").toLowerCase();
+          if ((textLower.includes("what") && textLower.includes("my name")) ||
+              (textLower.includes("who") && textLower.includes("am i")) ||
+              (textLower.includes("my name"))) {
+            if (lastSpokenName) enqueueEcho(`You are ${lastSpokenName}`);
+          }
+
+          // Keyword trigger: "start" or "begin"
+          // Only if we haven't started yet (no phases executed)
+          if (executedPhases.size === 0) {
+             const words = textLower.split(/\s+/);
+             if (words.includes("start") || words.includes("begin") || textLower.includes("let's start")) {
+                 logLine(`Heard start command from ${lastSpokenName || "someone"}`);
+                 handleToolCall({ properties: { name: "initiate_introduction" } });
+             }
+          }
+
+          // Round-robin advancement
+          if (roundState.active) {
+             const pName = participants[speakerId]?.name || "Unknown";
+             const isFacil = pName && isFacilName(pName);
+             const currentName = participants[roundState.currentId]?.name || "None";
+             logLine(`[RR Check] Speaker: ${pName} (${speakerId}) vs Current: ${currentName} (${roundState.currentId})`);
+          }
+
+          if (roundState.active && speakerId && participants[speakerId] && !isFacilName(participants[speakerId].name)) {
+            const spokenText = (text || "").trim();
+            if (spokenText.length > 1) {
+              const isExpected = speakerId === roundState.currentId;
+
+              if (isExpected || roundState.allowOutOfOrder) {
+                if (!roundState.completed.has(speakerId)) {
+                  const displayName = participants[speakerId]?.name || lastSpokenName || "Unknown";
+                  markComplete(speakerId, displayName, spokenText);
+
+                  // Queue thanks + next prompt (won't cut off)
+                  enqueueEcho(`Thanks, ${displayName}.`);
+                  promptNext();
+                } else {
+                   logLine(`Ignored input from ${participants[speakerId]?.name} (already completed round)`);
+                }
+              } else {
+                const expectedName = participants[roundState.currentId]?.name || "the next person";
+                logLine(`Strict round: heard ${participants[speakerId]?.name}, waiting for ${expectedName}`);
+              }
+            }
+          }
+        }
+
+        // Speaker hint for the model/tools
+        try {
+          frame.sendAppMessage({
+            event_type: "conversation.speaker_hint",
+            conversation_id: conversationId,
+            properties: {
+              participant_id: speakerId || "",
+              display_name: lastSpokenName || "",
+              confident: Boolean(lastSpokenName),
+            },
+          }, "*");
+        } catch (e) {}
+      });
+
+      // Tavus tool calls + replica speaking lifecycle
+      call.on("app-message", (ev) => {
+        const data = ev?.data || {};
+
+        if (data?.event_type === "conversation.tool_call") {
+          logLine(`Tool call received: ${data?.properties?.name || "<unknown>"}`);
+          handleToolCall(data);
+          return;
+        }
+
+        // Best-effort lifecycle (names vary; keep both)
+        if (data?.event_type === "conversation.replica.started_speaking" || data?.event_type === "conversation.replica.start_speaking") {
+          replicaSpeaking = true;
+          logLine("Replica started speaking.");
+          return;
+        }
+
+        if (data?.event_type === "conversation.replica.stopped_speaking" || data?.event_type === "conversation.replica.stop_speaking") {
+          replicaSpeaking = false;
+          logLine("Replica stopped speaking.");
+          pumpEchoQueue();
+          runEchoIdleCallbacksIfReady();
+          return;
         }
       });
-      replicaOffBtn.textContent = "Replica Off (Active)";
-      replicaOffBtn.disabled = true;
-    };
+    }
 
-    // --- Stop Speaking Logic ---
-    function applyReplicaStopLocally() {
-      if (replicaDisabled) return;
-      replicaDisabled = true;
-      ignoreToolCalls = true;
-      echoQueue = [];
-      echoSending = false;
-      replicaSpeaking = false;
-      
-      logLine("STOP SPEAKING triggered. Silencing replica.");
+    joinBtn.addEventListener("click", async () => {
+      const url = convoInput.value.trim();
+      const name = nameInput.value.trim() || "Guest";
+      conversationId = parseConversationId(url);
 
-      if (callObject) {
-        const all = callObject.participants();
-        Object.values(all).forEach(p => {
-          if (isReplica(p)) {
-             callObject.updateParticipant(p.session_id, { setAudio: false, setVideo: false });
-             logLine(`Unsubscribed from replica: ${p.user_name}`);
+      if (!url || !conversationId) {
+        logLine("Invalid conversation URL");
+        return;
+      }
+
+      joinBtn.disabled = true;
+      logLine(`Joining ${url} as ${name}`);
+
+      if (frame) {
+        try { await frame.leave(); } catch (e) {}
+      }
+
+      frame = window.DailyIframe.createFrame(document.getElementById("call"), {
+        showLeaveButton: true,
+        iframeStyle: { width: "100%", height: "100%", border: "0" },
+        theme: {
+          colors: {
+            mainAreaBg: "#0e152d",
+            mainAreaBgAccent: "#0e152d",
+            background: "#0b1021",
+            backgroundAccent: "#11172f",
+            baseText: "#f2f4ff",
+            supportiveText: "#9eb0e0",
+            border: "#1c2540",
+            accent: "#4fd1c5",
+            accentText: "#0b1021",
+            mainAreaText: "#f2f4ff"
           }
-        });
-      }
-      
-      if (replicaStopBtn) {
-          replicaStopBtn.textContent = "Stop Speaking (Active)";
-          replicaStopBtn.disabled = true;
-      }
-      if (replicaOffBtn) {
-          replicaOffBtn.textContent = "Replica Off (Active)";
-          replicaOffBtn.disabled = true;
-      }
-    }
-
-    function broadcastReplicaStop() {
-        if (!callObject || !conversationId) return;
-        logLine("Sending Tavus Interrupt...");
-        callObject.sendAppMessage({
-            message_type: "conversation",
-            event_type: "conversation.interrupt",
-            conversation_id: conversationId
-        }, "*");
-    }
-
-    replicaStopBtn.onclick = () => {
-        broadcastReplicaStop();
-        applyReplicaStopLocally();
-    };
-
-    recordBtn.onclick = async () => {
-      if (!callObject) return;
-      recordBtn.disabled = true;
-      try {
-        if (recordingState.active) {
-           logLine("Stopping recording...");
-           await callObject.stopRecording();
-        } else {
-           logLine("Starting recording...");
-           await callObject.startRecording();
         }
-      } catch (e) {
-        logLine(`Recording Action Failed: ${e}`);
+      });
+
+      wireEvents(frame);
+
+      try {
+        await frame.join({ url, userName: name });
+        logLine("Joined meeting. Talk in two tabs to see diarization.");
+        registerRoster(frame?.participants().local, true);
+        startBtn.disabled = false;
+        phaseBtns.forEach(b => b.disabled = false);
+      } catch (err) {
+        logLine(`Join failed: ${err}`);
+        joinBtn.disabled = false;
       }
-      recordBtn.disabled = false;
-    };
+    });
 
-    btnMic.onclick = () => callObject.setLocalAudio(!callObject.participants().local.audio);
-    btnCam.onclick = () => callObject.setLocalVideo(!callObject.participants().local.video);
-    btnScreen.onclick = () => {
-       const local = callObject.participants().local;
-       if (local.screen) callObject.stopScreenShare();
-       else callObject.startScreenShare();
-    };
-    btnLeave.onclick = async () => {
-       await callObject.leave();
-       callObject.destroy();
-       callObject = null;
-       sidebar.innerHTML = "";
-       stageVideo.srcObject = null;
-       joinBtn.disabled = false;
-       logLine("Left call.");
-    };
+    startBtn.addEventListener("click", () => {
+      if (executedPhases.size > 0) {
+        logLine("Icebreaker already started.");
+        return;
+      }
+      logLine("Manual start triggered.");
+      handleToolCall({ properties: { name: "initiate_introduction" } });
+      startBtn.disabled = true;
+    });
 
+    btnIntro.onclick = () => handleToolCall({ properties: { name: "initiate_introduction" } });
+    btnPicnic.onclick = () => handleToolCall({ properties: { name: "start_picnic_game" } });
+    btnMorning.onclick = () => handleToolCall({ properties: { name: "start_morning_enjoyment_round" } });
+    btnFun.onclick = () => handleToolCall({ properties: { name: "start_fun_skill_round" } });
+    btnShared.onclick = () => handleToolCall({ properties: { name: "start_shared_preference_task" } });
+    btnTransition.onclick = () => handleToolCall({ properties: { name: "transition_to_next_session" } });
   </script>
 </body>
 </html>

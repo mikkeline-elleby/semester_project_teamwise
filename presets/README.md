@@ -44,7 +44,7 @@ IDs are still supported for advanced cases, but names are the default path.
 Layer fragments describe how the language model behaves and what function tools it can call. Place them in `presets/layers/llm/`.
 
 Common fields:
-- model: LLM model id (e.g., "tavus-llama").
+- model: LLM model id (e.g., "tavus-gpt-oss").
 - tools: Array of function-calling tool definitions.
 
 Tool object shape (summary):
@@ -56,7 +56,7 @@ Tool object shape (summary):
 Example:
 ```json
 {
-  "model": "tavus-llama",
+  "model": "tavus-gpt-oss",
   "tools": [
     {
       "type": "function",
@@ -75,10 +75,11 @@ Example:
 ```
 
 Model variants provided out-of-the-box (choose by setting the `llm` field in your persona config):
-- `tavus_llama` → `model: "tavus-llama"`
-- `tavus_llama_4` → `model: "tavus-llama-4"`
+- `tavus-gpt-oss` → `model: "tavus-gpt-oss"`
 - `tavus_gpt_4o` → `model: "tavus-gpt-4o"`
 - `tavus_gpt_4o_mini` → `model: "tavus-gpt-4o-mini"`
+
+Note: `tavus_llama` / `tavus_llama_4` fragments may be deprecated upstream. They remain in this repo for reference, but the default recommendation is `tavus-gpt-oss`.
 
 ## Perception layer fragments
 

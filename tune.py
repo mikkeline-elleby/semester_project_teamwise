@@ -24,9 +24,125 @@ from util import (
     WEBHOOK_URL,
     resolve_objectives_id_by_name,
     resolve_guardrails_id_by_name,
+    render_system_prompt,
 )
 import pathlib as _pl
 import glob, os
+
+
+_UNRENDERED_PLACEHOLDER_RE = re.compile(r"\{\{[^}]+\}\}")
+
+
+def _find_unrendered_placeholders(text: str) -> List[str]:
+    return sorted(set(_UNRENDERED_PLACEHOLDER_RE.findall(text or "")))
+
+
+def _assert_no_unrendered_placeholders(text: str, *, source: str) -> None:
+    leftovers = _find_unrendered_placeholders(text)
+    if leftovers:
+        raise ValueError(
+            f"Unrendered placeholders remain in system_prompt from {source}: {', '.join(leftovers)}"
+        )
+
+
+def _load_participants_config(path: pathlib.Path) -> list[str]:
+    data = _load_json_config(path)
+    if not isinstance(data, dict):
+        raise ValueError("participants.json must be a JSON object")
+    participants = data.get("participants")
+    if not isinstance(participants, list):
+        raise ValueError("participants.json must contain a 'participants' array")
+    return [str(p).strip() for p in participants]
+
+
+def _load_text_file(path: pathlib.Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
+def _load_participants_for_template(path: pathlib.Path) -> List[str]:
+    """Load exactly 4 participant display names.
+
+    Supported shapes:
+      {"participants": ["A", "B", "C", "D"]}
+      {"participants": [{"name":"A"}, {"name":"B"}, {"name":"C"}, {"name":"D"}]}
+    """
+    data = _load_json_config(path)
+    if not isinstance(data, dict):
+        raise ValueError("participants file must be a JSON object")
+    participants = data.get("participants")
+    if not isinstance(participants, list):
+        raise ValueError("participants file must contain a 'participants' array")
+
+    names: List[str] = []
+    for i, p in enumerate(participants):
+        if isinstance(p, str):
+            name = p.strip()
+        elif isinstance(p, dict):
+            v = p.get("name")
+            name = str(v).strip() if v is not None else ""
+        else:
+            name = ""
+        if not name:
+            raise ValueError(f"participants[{i}] must be a non-empty string or object with non-empty 'name'")
+        names.append(name)
+
+    if len(names) != 4:
+        raise ValueError(f"Expected exactly 4 participants, got {len(names)}")
+    return names
+
+
+_SUPPORTED_PROMPT_PLACEHOLDERS_RE = re.compile(
+    r"\{\{\s*(P[1-4]|participants\[[0-3]\])\s*\}\}"
+)
+
+
+def _template_has_supported_placeholders(template: str) -> bool:
+    return bool(_SUPPORTED_PROMPT_PLACEHOLDERS_RE.search(template or ""))
+
+
+def _write_final_prompt(prompt: str, path: pathlib.Path = pathlib.Path("logs") / "final_prompt.txt") -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(prompt, encoding="utf-8")
+
+
+def _assert_no_tuples(value: object, path: str = "$") -> None:
+    if isinstance(value, tuple):
+        raise ValueError(f"Invalid tuple encountered at {path}. JSON cannot contain tuples.")
+    if isinstance(value, dict):
+        for k, v in value.items():
+            _assert_no_tuples(v, f"{path}.{k}")
+    elif isinstance(value, list):
+        for i, v in enumerate(value):
+            _assert_no_tuples(v, f"{path}[{i}]")
+
+
+def _maybe_render_prompt_from_template(cfg: dict) -> Optional[str]:
+    """If cfg does not provide system_prompt, try rendering from template+participants.
+
+    Default paths:
+      - configs/participants.json
+      - configs/prompt_template.txt
+
+    Override via cfg keys:
+      - participants_file
+      - prompt_template_file
+    """
+    if cfg.get("system_prompt"):
+        return None
+
+    participants_file = cfg.get("participants_file") or "configs/participants.json"
+    template_file = cfg.get("prompt_template_file") or "configs/prompt_template.txt"
+
+    p_path = pathlib.Path(participants_file)
+    t_path = pathlib.Path(template_file)
+    if not p_path.exists() or not t_path.exists():
+        return None
+
+    participants = _load_participants_config(p_path)
+    template = _load_text_file(t_path)
+    rendered = render_system_prompt(template, participants)
+    _assert_no_unrendered_placeholders(rendered, source=str(t_path))
+    return rendered
 
 def _build_s3_recording_properties_from_env(exit_on_missing: bool = True) -> Optional[dict]:
     """Build native Tavus S3 recording properties from environment variables.
@@ -215,7 +331,7 @@ def _resolve_persona_id_from_logs(name: Optional[str] = None) -> Optional[str]:
 def cmd_persona(args: argparse.Namespace) -> int:
     """Create a Persona via Tavus API from CLI flags and/or a config file."""
     # Load optional config file for defaults
-    cfg = {}
+    cfg: dict = {}
     if getattr(args, "config", None):
         cfg_path = pathlib.Path(args.config)
         if not cfg_path.exists():
@@ -225,8 +341,64 @@ def cmd_persona(args: argparse.Namespace) -> int:
         except Exception as e:
             sys.exit(f"Persona config is not valid JSON/JSONC: {e}")
 
+    # Persona-builder mode: construct cfg from persona-template + prompt-template + participants
+    # Precedence: explicit flags override computed values.
+    if getattr(args, "persona_template", None) and getattr(args, "prompt_template", None) and getattr(args, "participants", None):
+        persona_template_path = pathlib.Path(args.persona_template)
+        prompt_template_path = pathlib.Path(args.prompt_template)
+        participants_path = pathlib.Path(args.participants)
+        if not persona_template_path.exists():
+            sys.exit(f"persona template not found: {persona_template_path}")
+        if not prompt_template_path.exists():
+            sys.exit(f"prompt template not found: {prompt_template_path}")
+        if not participants_path.exists():
+            sys.exit(f"participants file not found: {participants_path}")
+
+        try:
+            cfg = _load_json_config(persona_template_path)
+        except Exception as e:
+            sys.exit(f"persona template is not valid JSON/JSONC: {e}")
+        if not isinstance(cfg, dict):
+            sys.exit("persona template must be a JSON object")
+
+        try:
+            template_text = _load_text_file(prompt_template_path)
+        except Exception as e:
+            sys.exit(f"Failed to read prompt template: {e}")
+
+        try:
+            participants_list = _load_participants_for_template(participants_path)
+        except Exception as e:
+            sys.exit(str(e))
+
+        if not _template_has_supported_placeholders(template_text):
+            print(
+                "Warning: no supported placeholders found in prompt template. "
+                "Expected one of {{P1}}..{{P4}} or {{participants[0]}}..{{participants[3]}}.",
+                file=sys.stderr,
+            )
+
+        try:
+            rendered_prompt = render_system_prompt(template_text, participants_list)
+        except Exception as e:
+            sys.exit(f"Failed to render system prompt: {e}")
+
+        # Debug: persist what we're about to send
+        try:
+            _write_final_prompt(rendered_prompt)
+        except Exception as e:
+            print(f"Warning: failed to write logs/final_prompt.txt: {e}", file=sys.stderr)
+
+        cfg["system_prompt"] = rendered_prompt
+        if getattr(args, "persona_name", None):
+            cfg["persona_name"] = args.persona_name
+
     persona_name = args.persona_name or cfg.get("persona_name")
     system_prompt = args.system_prompt or cfg.get("system_prompt")
+    if not system_prompt:
+        rendered = _maybe_render_prompt_from_template(cfg)
+        if rendered:
+            system_prompt = rendered
     pipeline_mode = (args.pipeline_mode or cfg.get("pipeline_mode") or "full").lower()
     context = args.context or cfg.get("context")
     # Accept either explicit IDs or names; names will be resolved below.
@@ -404,6 +576,12 @@ def cmd_persona(args: argparse.Namespace) -> int:
     if args.dry_run:
         return 0
 
+    # Defensive: ensure no tuples slip into request payload
+    try:
+        _assert_no_tuples(payload)
+    except Exception as e:
+        sys.exit(str(e))
+
     if update_mode:
         url = f"{PERSONA_ENDPOINT}/{persona_id_for_update}"
         # Build JSON Patch operations for provided fields
@@ -428,6 +606,23 @@ def cmd_persona(args: argparse.Namespace) -> int:
         except Exception:
             print(r.text)
         save_log("persona_create", payload, r, PERSONA_ENDPOINT)
+        # Friendly output: surface persona_id explicitly
+        try:
+            data = r.json()
+        except Exception:
+            data = {}
+        pid = data.get("persona_id") if isinstance(data, dict) else None
+        if isinstance(pid, str) and pid.strip():
+            print(f"persona_id: {pid.strip()}")
+        # Optional: write persona_id to file for easy reuse (path name kept for backward compatibility)
+        if getattr(args, "write_persona_id", False):
+            if isinstance(pid, str) and pid.strip():
+                outp = pathlib.Path("personas") / "generated_replica_id.txt"
+                outp.parent.mkdir(parents=True, exist_ok=True)
+                outp.write_text(pid.strip() + "\n", encoding="utf-8")
+                print(f"Saved persona_id to: {outp}")
+            else:
+                print("Warning: could not find persona_id in response; not writing id file.")
         return 0 if r.status_code < 400 else 1
 
 
@@ -596,6 +791,10 @@ def main():
     pp.add_argument("--config", help="Path to a JSON config with persona fields")
     pp.add_argument("--persona-name")
     pp.add_argument("--system-prompt", required=False, help="LLM system prompt; required for pipeline_mode=full")
+    pp.add_argument("--prompt-template", help="Path to a text prompt template (used with --participants and --persona-template)")
+    pp.add_argument("--participants", help="Path to participants JSON (exactly 4 names; used with --prompt-template)")
+    pp.add_argument("--persona-template", help="Path to persona template JSON (template.example.json) used as the base config")
+    pp.add_argument("--write-persona-id", action="store_true", help="Write created persona_id to personas/generated_replica_id.txt")
     pp.add_argument("--pipeline-mode", choices=["full", "echo"], default="full", help="CVI pipeline mode")
     pp.add_argument("--context")
     pp.add_argument("--default-replica-id")
@@ -688,6 +887,11 @@ def main():
                 "document_ids", "document_tags", "objectives_id", "guardrails_id"
             ) and v not in (None, "")
         }
+
+        if not p_payload.get("system_prompt"):
+            rendered = _maybe_render_prompt_from_template(persona_cfg)
+            if rendered:
+                p_payload["system_prompt"] = rendered
         # Layers provided inline or via modular keys
         layers = persona_cfg.get("layers")
         # Modular fragments
