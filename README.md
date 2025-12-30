@@ -270,3 +270,14 @@ For task 2:
 
 Communication can be done over a channel or email.
 
+---
+
+## Daily custom domain experiment (WIP)
+
+A partial implementation of running the pipeline against a custom Daily domain lives on the `daily_domain` branch.
+
+Status:
+- ✅ Bot participant is able to join the meeting on the custom domain
+- ❌ No audio and no video frames are received/published (media path not working end-to-end yet)
+
+If you want to inspect that work-in-progress, check out the branch and follow the notes in its commits/README updates. This is **not** part of the final evaluation flow on `main`.
