@@ -91,7 +91,7 @@ Webhook payloads and API request/response logs are stored under `logs/` (`logs/p
 
 ## 4) Web demos 
 
-This repo includes a small `web-demo/` folder with two UIs that help during development and evaluation.
+This repo includes a folder `web-demo/` folder with two UIs that help during development and evaluation.
 
 ### A) Daily diarization helper (multi-speaker name recognition)
 
@@ -133,7 +133,6 @@ Purpose: join the meeting and subscribe only to the replica’s audio stream (no
 
 This is useful for user studies where you want voice facilitation without visual presence.
 
-(See `web-demo/` for the specific HTML entrypoint used in your repo.)
 
 ---
 
@@ -144,7 +143,6 @@ bin/demo_v2.sh         # quick end-to-end demo
 bin/clean_logs.sh      # prune old logs (keeps 7 days by default)
 ```
 
-Note: This repo does not include `bin/documents.py` / `bin/sync_documents.py`. If you see them referenced elsewhere, treat those lines as stale.
 
 ---
 
