@@ -235,7 +235,7 @@ bin/tune.sh persona \
   --persona-template configs/persona/template.example.json \
   --prompt-template configs/prompt_template.txt \
   --participants configs/participants.json \
-  --persona-name "Facilitator" \
+  --persona-name "Teamwise" \
   --print-payload \
   --dry-run
 ```
@@ -247,7 +247,7 @@ bin/tune.sh persona \
   --persona-template configs/persona/template.example.json \
   --prompt-template configs/prompt_template.txt \
   --participants configs/participants.json \
-  --persona-name "Facilitator" \
+  --persona-name "Teamwise" \
   --write-persona-id
 ```
 
